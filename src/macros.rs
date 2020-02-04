@@ -5,6 +5,12 @@ macro_rules! lockprintln {
         std::writeln!(std::io::stdout().lock(), $($arg)*).expect("LPRINTLN");
     })
 }
+macro_rules! log {
+    ($logger:expr, $($arg:tt)*) => {{
+        use std::fmt::Write;
+        writeln!($logger, $($arg)*).unwrap();
+    }};
+}
 macro_rules! assert_let {
     ($pat:pat = $expr:expr => $work:expr) => {
         if let $pat = $expr {
