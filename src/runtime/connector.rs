@@ -92,6 +92,12 @@ impl Connector {
         });
         Ok(())
     }
+    pub fn get_mut_logger(&mut self) -> Option<&mut String> {
+        match self {
+            Connector::Connected(connected) => Some(&mut connected.controller.inner.logger),
+            _ => None,
+        }
+    }
 
     pub fn put(&mut self, native_port_index: usize, payload: Payload) -> Result<(), PortOpErr> {
         use PortOpErr::*;

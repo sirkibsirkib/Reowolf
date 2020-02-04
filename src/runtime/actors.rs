@@ -56,7 +56,7 @@ impl PolyP {
     ) -> Result<SyncRunResult, EndpointErr> {
         use SyncRunResult as Srr;
         let cid = m_ctx.inner.channel_id_stream.controller_id;
-        lockprintln!("{:?}: ~ Running branches for PolyP {:?}!", cid, m_ctx.my_subtree_id,);
+        log!(&mut m_ctx.inner.logger, "~ Running branches for PolyP {:?}!", m_ctx.my_subtree_id,);
         while let Some((mut predicate, mut branch)) = to_run.pop() {
             let mut r_ctx = BranchPContext {
                 m_ctx: m_ctx.reborrow(),
@@ -66,9 +66,9 @@ impl PolyP {
             };
             use PolyBlocker as Sb;
             let blocker = branch.state.sync_run(&mut r_ctx, protocol_description);
-            lockprintln!(
-                "{:?}: ~ ... ran PolyP {:?} with branch pred {:?} to blocker {:?}",
-                cid,
+            log!(
+                &mut r_ctx.m_ctx.inner.logger,
+                "~ ... ran PolyP {:?} with branch pred {:?} to blocker {:?}",
                 r_ctx.m_ctx.my_subtree_id,
                 &predicate,
                 &blocker
@@ -89,10 +89,10 @@ impl PolyP {
                     if predicate.replace_assignment(channel_id, true) != Some(false) {
                         // don't rerun now. Rerun at next `sync_run`
 
-                        lockprintln!("{:?}: ~ ... Delay {:?}", cid, m_ctx.my_subtree_id,);
+                        log!(&mut m_ctx.inner.logger, "~ ... Delay {:?}", m_ctx.my_subtree_id,);
                         self.incomplete.insert(predicate, branch);
                     } else {
-                        lockprintln!("{:?}: ~ ... Drop {:?}", cid, m_ctx.my_subtree_id,);
+                        log!(&mut m_ctx.inner.logger, "~ ... Drop {:?}", m_ctx.my_subtree_id,);
                     }
                     // ELSE DROP
                 }
@@ -111,19 +111,18 @@ impl PolyP {
                     to_run.push((predicate_f, branch_f));
                 }
                 Sb::SyncBlockEnd => {
+                    log!(
+                        &mut m_ctx.inner.logger,
+                        "~ ... ran PolyP {:?} with branch pred {:?} to blocker {:?}",
+                        m_ctx.my_subtree_id,
+                        &predicate,
+                        &blocker
+                    );
                     // come up with the predicate for this local solution
                     let lookup =
                         |&ekey| m_ctx.inner.endpoint_exts.get(ekey).unwrap().info.channel_id;
                     let ekeys_channel_id_iter = self.ekeys.iter().map(lookup);
                     predicate.batch_assign_nones(ekeys_channel_id_iter, false);
-
-                    lockprintln!(
-                        "{:?}: ~ ... ran PolyP {:?} with branch pred {:?} to blocker {:?}",
-                        cid,
-                        m_ctx.my_subtree_id,
-                        &predicate,
-                        &blocker
-                    );
 
                     // OK now check we really received all the messages we expected to
                     let num_fired = predicate.iter_matching(true).count();
@@ -131,16 +130,16 @@ impl PolyP {
                         branch.inbox.keys().chain(branch.outbox.keys()).map(lookup).count();
                     match num_fired.cmp(&num_msgs) {
                         Ordering::Less => unreachable!(),
-                        Ordering::Greater => lockprintln!(
-                            "{:?}: {:?} with pred {:?} finished but |inbox|+|outbox| < .",
-                            cid,
+                        Ordering::Greater => log!(
+                            &mut m_ctx.inner.logger,
+                            "{:?} with pred {:?} finished but |inbox|+|outbox| < .",
                             m_ctx.my_subtree_id,
                             &predicate,
                         ),
                         Ordering::Equal => {
-                            lockprintln!(
-                                "{:?}: {:?} with pred {:?} finished! Storing this solution locally.",
-                                cid,
+                            log!(
+                                &mut m_ctx.inner.logger,
+                                "{:?} with pred {:?} finished! Storing this solution locally.",
                                 m_ctx.my_subtree_id,
                                 &predicate,
                             );
@@ -287,7 +286,11 @@ impl PolyP {
             std::mem::swap(&mut self.incomplete, &mut incomplete2);
             to_run
         };
-        lockprintln!("{:?}: ... DONE FEEDING BRANCHES. {} branches to run!", cid, to_run.len(),);
+        log!(
+            &mut m_ctx.inner.logger,
+            "... DONE FEEDING BRANCHES. {} branches to run!",
+            to_run.len(),
+        );
         self.poly_run_these_branches(m_ctx, protocol_description, to_run)
     }
 

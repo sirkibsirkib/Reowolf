@@ -119,6 +119,7 @@ impl Controller {
             mono_ps: p_monos,
             mono_n: n_mono,
             round_index: 0,
+            logger: String::default(),
         };
         let controller = Self { protocol_description, inner, ephemeral: Default::default() };
         Ok((controller, native_interface))

@@ -109,6 +109,7 @@ struct ControllerInner {
     mono_n: Option<MonoN>,
     mono_ps: Vec<MonoP>,
     family: ControllerFamily,
+    logger: String,
 }
 
 /// This structure has its state entirely reset between synchronous rounds
