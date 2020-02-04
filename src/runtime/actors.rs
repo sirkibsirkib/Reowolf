@@ -79,10 +79,10 @@ impl PolyP {
                     assert!(self.ekeys.contains(&ekey));
                     let channel_id =
                         r_ctx.m_ctx.inner.endpoint_exts.get(ekey).unwrap().info.channel_id;
-                    lockprintln!(
-                        "{:?}: ~ ... {:?} couldnt read msg for port {:?}. has inbox {:?}",
-                        cid,
-                        m_ctx.my_subtree_id,
+                    log!(
+                        &mut r_ctx.m_ctx.inner.logger,
+                        "~ ... {:?} couldnt read msg for port {:?}. has inbox {:?}",
+                        r_ctx.m_ctx.my_subtree_id,
                         channel_id,
                         &branch.inbox,
                     );
@@ -191,30 +191,30 @@ impl PolyP {
         payload: Payload,
     ) -> Result<SyncRunResult, EndpointErr> {
         // try exact match
-        let cid = m_ctx.inner.channel_id_stream.controller_id;
 
         let to_run = if self.complete.contains_key(&payload_predicate) {
             // exact match with stopped machine
 
-            lockprintln!(
-                "{:?}: ... poly_recv_run matched stopped machine exactly! nothing to do here",
-                cid,
+            log!(
+                &mut m_ctx.inner.logger,
+                "... poly_recv_run matched stopped machine exactly! nothing to do here",
             );
             vec![]
         } else if let Some(mut branch) = self.incomplete.remove(&payload_predicate) {
             // exact match with running machine
 
-            lockprintln!(
-                "{:?}: ... poly_recv_run matched running machine exactly! pred is {:?}",
-                cid,
+            log!(
+                &mut m_ctx.inner.logger,
+                "... poly_recv_run matched running machine exactly! pred is {:?}",
                 &payload_predicate
             );
             branch.inbox.insert(ekey, payload);
             vec![(payload_predicate, branch)]
         } else {
-            lockprintln!(
-                "{:?}: ... poly_recv_run didn't have any exact matches... Let's try feed it to all branches",
-                cid,
+            log!(
+                &mut m_ctx.inner.logger,
+                "... poly_recv_run didn't have any exact matches... Let's try feed it to all branches",
+
             );
             let mut incomplete2 = HashMap::<_, _>::default();
             let to_run = self
@@ -224,9 +224,10 @@ impl PolyP {
                     use CommonSatResult as Csr;
                     match old_predicate.common_satisfier(&payload_predicate) {
                         Csr::FormerNotLatter | Csr::Equivalent => {
-                            lockprintln!(
-                                "{:?}: ... poly_recv_run This branch is compatible unaltered! branch pred: {:?}",
-                                cid,
+                            log!(
+                &mut m_ctx.inner.logger,
+                                "... poly_recv_run This branch is compatible unaltered! branch pred: {:?}",
+                              
                                 &old_predicate
                             );
                             // old_predicate COVERS the assumptions of payload_predicate
@@ -236,9 +237,10 @@ impl PolyP {
                         }
                         Csr::New(new) => {
 
-                            lockprintln!(
-                                "{:?}: ... poly_recv_run payloadpred {:?} and branchpred {:?} satisfied by new pred {:?}. FORKING",
-                                cid,
+                            log!(
+                &mut m_ctx.inner.logger,
+                                "... poly_recv_run payloadpred {:?} and branchpred {:?} satisfied by new pred {:?}. FORKING",
+                              
                                 &payload_predicate,
                                 &old_predicate,
                                 &new,
@@ -254,9 +256,10 @@ impl PolyP {
                         }
                         Csr::LatterNotFormer => {
 
-                            lockprintln!(
-                                "{:?}: ... poly_recv_run payloadpred {:?} subsumes branch pred {:?}. FORKING",
-                                cid,
+                            log!(
+                &mut m_ctx.inner.logger,
+                                "... poly_recv_run payloadpred {:?} subsumes branch pred {:?}. FORKING",
+                           
                                 &old_predicate,
                                 &payload_predicate,
                             );
@@ -270,9 +273,10 @@ impl PolyP {
                             Some((payload_predicate.clone(), payload_branch))
                         }
                         Csr::Nonexistant => {
-                            lockprintln!(
-                                "{:?}: ... poly_recv_run SKIPPING because branchpred={:?}. payloadpred={:?}",
-                                cid,
+                            log!(
+                &mut m_ctx.inner.logger,
+                                "... poly_recv_run SKIPPING because branchpred={:?}. payloadpred={:?}",
+                              
                                 &old_predicate,
                                 &payload_predicate,
                             );
