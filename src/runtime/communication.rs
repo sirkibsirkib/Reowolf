@@ -451,6 +451,11 @@ impl MonoContext for MonoPContext<'_> {
     type D = ProtocolD;
     type S = ProtocolS;
     fn new_component(&mut self, moved_ekeys: HashSet<Key>, init_state: Self::S) {
+        lockprintln!(
+            "{:?}: !! MonoContext callback to new_component with ekeys {:?}!",
+            self.inner.channel_id_stream.controller_id,
+            &moved_ekeys,
+        );
         if moved_ekeys.is_subset(self.ekeys) {
             self.ekeys.retain(|x| !moved_ekeys.contains(x));
             self.inner.mono_ps.push(MonoP { state: init_state, ekeys: moved_ekeys });
@@ -469,13 +474,24 @@ impl MonoContext for MonoPContext<'_> {
             info: EndpointInfo { polarity: Putter, channel_id },
             endpoint: b,
         });
+        lockprintln!(
+            "{:?}: !! MonoContext callback to new_channel. returning ekeys {:?}!",
+            self.inner.channel_id_stream.controller_id,
+            [kp, kg],
+        );
         [kp, kg]
     }
     fn new_random(&self) -> u64 {
         type Bytes8 = [u8; std::mem::size_of::<u64>()];
         let mut bytes = Bytes8::default();
         getrandom::getrandom(&mut bytes).unwrap();
-        unsafe { std::mem::transmute::<Bytes8, _>(bytes) }
+        let val = unsafe { std::mem::transmute::<Bytes8, _>(bytes) };
+        lockprintln!(
+            "{:?}: !! MonoContext callback to new_random. returning val {:?}!",
+            self.inner.channel_id_stream.controller_id,
+            val,
+        );
+        val
     }
 }
 
@@ -565,10 +581,24 @@ impl PolyContext for BranchPContext<'_, '_> {
     fn is_firing(&self, ekey: Key) -> Option<bool> {
         assert!(self.ekeys.contains(&ekey));
         let channel_id = self.m_ctx.inner.endpoint_exts.get(ekey).unwrap().info.channel_id;
-        self.predicate.query(channel_id)
+        let val = self.predicate.query(channel_id);
+        lockprintln!(
+            "{:?}: !! PolyContext callback to is_firing by {:?}! returning {:?}",
+            self.m_ctx.inner.channel_id_stream.controller_id,
+            self.m_ctx.my_subtree_id,
+            val,
+        );
+        val
     }
     fn read_msg(&self, ekey: Key) -> Option<&Payload> {
         assert!(self.ekeys.contains(&ekey));
-        self.inbox.get(&ekey)
+        let val = self.inbox.get(&ekey);
+        lockprintln!(
+            "{:?}: !! PolyContext callback to read_msg by {:?}! returning {:?}",
+            self.m_ctx.inner.channel_id_stream.controller_id,
+            self.m_ctx.my_subtree_id,
+            val,
+        );
+        val
     }
 }

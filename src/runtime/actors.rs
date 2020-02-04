@@ -54,6 +54,8 @@ impl PolyP {
         mut to_run: Vec<(Predicate, BranchP)>,
     ) -> Result<SyncRunResult, EndpointErr> {
         use SyncRunResult as Srr;
+        let cid = m_ctx.inner.channel_id_stream.controller_id;
+        lockprintln!("{:?}: ~ Running branches for PolyP {:?}!", cid, m_ctx.my_subtree_id,);
         while let Some((mut predicate, mut branch)) = to_run.pop() {
             let mut r_ctx = BranchPContext {
                 m_ctx: m_ctx.reborrow(),
@@ -63,6 +65,13 @@ impl PolyP {
             };
             use PolyBlocker as Sb;
             let blocker = branch.state.sync_run(&mut r_ctx, protocol_description);
+            lockprintln!(
+                "{:?}: ~ ... ran PolyP {:?} with branch pred {:?} to blocker {:?}",
+                cid,
+                r_ctx.m_ctx.my_subtree_id,
+                &predicate,
+                &blocker
+            );
             match blocker {
                 Sb::Inconsistent => {} // DROP
                 Sb::CouldntReadMsg(ekey) => {
