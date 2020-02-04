@@ -1,0 +1,9 @@
+#version 100
+
+primitive main(int a) {
+    while (true) {
+        synchronous {
+            break; // not allowed
+        }
+    }
+}

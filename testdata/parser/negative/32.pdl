@@ -1,0 +1,9 @@
+#version 100
+
+primitive main(int a) {
+    loop: {
+        synchronous {
+            goto loop; // not allowed
+        }
+    }
+}

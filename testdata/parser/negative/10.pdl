@@ -1,0 +1,14 @@
+#version 100
+
+// sync block nested in sync block
+primitive main(in a, out b) {
+	while (true) {
+		synchronous {
+			if (false || true) {
+				synchronous {
+					skip;
+				}
+			}
+		}
+	} 
+}

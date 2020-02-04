@@ -1,0 +1,42 @@
+#version 100
+
+/*
+Adaptation of 7.pdl
+*/
+
+composite main() {}
+
+composite example(in[] a, in[] b, out x) {
+	new async(a);
+	new async(b);
+	new resolve(a, b, x);
+}
+
+primitive resolve(in[] a, in[] b, out x) {
+	while (true) {
+		synchronous {
+			int i = 0;
+			while (i < a.length && i < b.length) {
+				if (fires(a[i]) && fires(b[i])) {
+					put(x, create(0)); // send token to x
+					break;
+				}
+				i++;
+			}
+			if (i >= a.length || i >= b.length)
+				assert !fires(x);
+		}
+	}
+}
+
+primitive async(in[] a) {
+	while (true) {
+		synchronous {
+			int i = 0;
+			while (i < a.length)
+				if (fires(a[i++])) break;
+			while (i < a.length)
+				assert !fires(a[i++]);
+		}
+	}
+}

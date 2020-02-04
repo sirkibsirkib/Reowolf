@@ -1,0 +1,7 @@
+#version 100
+
+int main(int a) {
+    int x = 5;
+    int y = x + 5;
+    int z = z; // now allowed
+}

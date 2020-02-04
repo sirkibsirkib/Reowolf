@@ -1,0 +1,10 @@
+#version 100
+
+// duplicate procedures
+composite main(in a, out b) {
+	id(a, d); 
+}
+
+primitive main(in a, out b) {
+	skip;
+}

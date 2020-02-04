@@ -1,0 +1,3 @@
+Parse error at 18.pdl:7:11: Unindexable expression
+	y[0] = (x+y)[0];
+	         ^

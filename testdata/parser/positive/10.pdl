@@ -1,0 +1,27 @@
+#version 100
+
+composite main() {}
+
+primitive example(in a, out[] b) {
+	while (true) {
+		synchronous {
+			if (fires(a)) {
+				int i = 0;
+				while (i < b.length) {
+					if (fires(b[i])) {
+						int j = i + 1;
+						while (j < b.length)
+							assert !fires(b[j++]);
+						break;
+					}
+					i++;
+				}
+				assert i < b.length;
+			} else {
+				int i = 0;
+				while (i < b.length)
+					assert !fires(b[i++]);
+			}
+		}
+	}
+}

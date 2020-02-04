@@ -1,0 +1,16 @@
+#version 100
+
+import std.reo;
+
+composite main(in A, in B, out C) {
+	channel xo -> xi;
+	channel yo -> yi;
+	channel zo -> zi;
+	channel do -> di;
+	channel eo -> ei;
+	new replicator(A, {xo, yo});
+	new replicator(B, {zo, do});
+	new syncdrain(xi, zi);
+	new fifo(di, eo);
+	new merger({yi, ei}, C);
+}

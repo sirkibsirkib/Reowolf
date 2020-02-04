@@ -1,0 +1,3 @@
+Parse error at 24.pdl:8:9: Unassignable expression
+	x *= x * x *= 5;
+	       ^

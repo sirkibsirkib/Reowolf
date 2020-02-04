@@ -1,0 +1,3 @@
+Parse error at 4.pdl:8:7: Illegal built-in occurrence
+		y = get(a); // illegal
+		    ^

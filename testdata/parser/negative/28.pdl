@@ -1,0 +1,7 @@
+#version 100
+
+int main(int a) {
+    int x = 0;
+    (x + 5)++; // not assignable
+    return x;
+}

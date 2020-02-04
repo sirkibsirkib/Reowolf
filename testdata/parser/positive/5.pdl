@@ -1,0 +1,20 @@
+#version 100
+
+import std.reo;
+import std.buf;
+
+primitive main(in a, out b) {
+    while (true) {
+        synchronous {
+            if (fires(a) && fires(b)) {
+                msg x = get(a);
+                short y = readShort(x, 0);
+                y++;
+                writeShort(x, 0, y);
+                put(b, x);
+            } else {
+                assert !fires(a) && !fires(b);
+            }
+        }
+    }
+}

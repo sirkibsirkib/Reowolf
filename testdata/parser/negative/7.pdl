@@ -1,0 +1,9 @@
+#version 100
+
+import std.reo;
+
+// shadowing formal parameter
+composite main(in a, out b) {
+	channel c -> a;
+	new sync(a, b);
+}

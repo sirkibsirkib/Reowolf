@@ -1,0 +1,11 @@
+#version 100
+
+// sync block nested deeply in composite
+composite main(in a, out b) {
+	channel x -> y;
+	while (true) {
+		synchronous {
+			skip;
+		}
+	}
+}

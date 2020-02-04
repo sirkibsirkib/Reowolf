@@ -1,0 +1,12 @@
+#version 100
+
+composite main() {}
+
+int test() {
+	int x = 5;
+	while (x < 10) {
+	    x += 2;
+	    if (x == 10) return x; // never taken
+	}
+	return x;
+}

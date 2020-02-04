@@ -1,0 +1,13 @@
+#version 100
+
+// built-in outside sync block
+primitive main(in a, out b) {
+	int x = 0;
+	msg y = create(0); // legal
+	while (x < 10) {
+		y = get(a); // illegal
+		synchronous {
+			y = get(a); // legal
+		}
+	}
+}

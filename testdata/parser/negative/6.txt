@@ -1,0 +1,3 @@
+Parse error at 6.pdl:6:26: Declared variable clash
+composite main(in a, out a) {
+                         ^

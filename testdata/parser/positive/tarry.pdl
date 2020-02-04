@@ -1,0 +1,197 @@
+#version 100
+
+/*
+Example distributed algorithm: Tarry's algorithm.
+
+A token passes around the network, starting at some initiator. The initiator
+starts the algorithm, and when the algorithm ends the token is back again at
+the initiator. The non-initiators are signaled when they receive the token
+for the first time; when the token is handled traversal continues.
+
+The network topology is defined by applications: they create an initiator or
+non-initiator component, and establish bidirectional channels in between.
+In this example, the whole network is created statically for simulation
+purposes: there are 4 processes and some channels in between.
+
+Ports: initiator start, initiator end, three pairs of signals.
+*/
+
+import std.reo;
+
+composite main(in start, out end, out s1o, in s1i, out s2o, in s2i, out s3o, in s3i) {
+	// Processes: p, q, r, s
+	// Channels: pq, pr, qr, rs
+	channel p_pq -> pq_q;
+	channel q_pq -> pq_p;
+	channel p_pr -> pr_r;
+	channel r_pr -> pr_p;
+	channel q_qr -> qr_r;
+	channel r_qr -> qr_q;
+	channel r_rs -> rs_s;
+	channel s_rs -> rs_r;
+	
+	new initiator(start, end, {pq_p, pr_p}, {p_pq, p_pr});
+	new noninitiator(s1o, s1i, {pq_q, qr_q}, {q_pq, q_qr});
+	new noninitiator(s2o, s2i, {pr_r, rs_r}, {r_pr, r_rs});
+	new noninitiator(s3o, s3i, {rs_s}, {s_rs});
+}
+primitive initiator(in start, out end, in[] peeri, out[] peero) {
+	msg token = null;
+	in[] neighbori = {};
+	out[] neighboro = {};
+	assert peeri.length == peero.length;
+	while (true) {
+		// Step 1. Initiator waits for token
+		while (token == null) {
+			synchronous {
+				if (fires(start)) {
+					token = get(start);
+				}
+			}
+		}
+		// Reset neighbors
+		neighbori = peeri;
+		peeri = {};
+		neighboro = peero;
+		peero = {};
+		// Step 2. Keep sending token to processes
+		while (neighbori.length > 0) {
+			int idx = 0;
+			// Select first channel that accepts our token
+			while (token != null) {
+				synchronous {
+					int i = 0;
+					while (i < neighboro.length) {
+						if (fires(neighboro[i])) {
+							put(neighboro[i], token);
+							idx = i;
+							token = null;
+							break;
+						} else i++;
+					}
+				}
+			}
+			// Eliminate from neighbor set
+			peeri = {neighbori[idx]} @ peeri;
+			peero = {neighboro[idx]} @ peero;
+			neighbori = neighbori[0:idx] @ neighbori[idx:neighbori.length];
+			neighboro = neighboro[0:idx] @ neighboro[idx:neighboro.length];
+			// Step 3. Await return of token
+			while (token == null) {
+				synchronous {
+					int i = 0;
+					while (i < peeri.length + neighbori.length) {
+						if (fires(peeri@neighbori[i])) {
+							token = get(peeri@neighbori[i]);
+							break;
+						} else i++;
+					}
+				}
+			}
+		}
+		// Step 4. Token is back and all neighbors visited
+		while (token != null) {
+			synchronous {
+				if (fires(end)) {
+					put(end, token);
+					token = null;
+				}
+			}
+		}
+	}
+}
+primitive noninitiator(out start, in end, in[] peeri, out[] peero) {
+	msg token = null;
+	in[] neighbori = {};
+	out[] neighboro = {};
+	in[] parenti = {};
+	out[] parento = {};
+	assert peeri.length == peero.length;
+	while (true) {
+		int idx = 0;
+		// Step 1. Await token for first time
+		while (token == null) {
+			synchronous {
+				int i = 0;
+				while (i < peeri.length) {
+					if (fires(peeri[i])) {
+						token = get(peeri[i]);
+						idx = i;
+						break;
+					} else i++;
+				}
+			}
+		}
+		// Reset neighbors
+		neighbori = peeri[0:idx] @ peeri[idx:peeri.length];
+		neighboro = peero[0:idx] @ peero[idx:peero.length];
+		parenti = {peeri[idx]};
+		parento = {peero[idx]};
+		peeri = {};
+		peero = {};
+		// Step 2. Non-initiator signals
+		while (token != null) {
+			synchronous {
+				if (fires(end)) {
+					put(end, token);
+					token = null;
+				}
+			}
+		}
+		while (token == null) {
+			synchronous {
+				if (fires(start)) {
+					token = get(start);
+				}
+			}
+		}
+		// Step 3. Keep sending token to processes
+		while (neighbori.length > 0) {
+			idx = 0;
+			// Select first channel that accepts our token
+			while (token != null) {
+				synchronous {
+					int i = 0;
+					while (i < neighboro.length) {
+						if (fires(neighboro[i])) {
+							put(neighboro[i], token);
+							idx = i;
+							token = null;
+							break;
+						} else i++;
+					}
+				}
+			}
+			// Eliminate from neighbor set
+			peeri = {neighbori[idx]} @ peeri;
+			peero = {neighboro[idx]} @ peero;
+			neighbori = neighbori[0:idx] @ neighbori[idx:neighbori.length];
+			neighboro = neighboro[0:idx] @ neighboro[idx:neighboro.length];
+			// Step 4. Await return of token
+			while (token == null) {
+				synchronous {
+					int i = 0;
+					while (i < peeri.length + neighbori.length) {
+						if (fires(peeri@neighbori[i])) {
+							token = get(peeri@neighbori[i]);
+							break;
+						} else i++;
+					}
+				}
+			}
+		}
+		// Step 5. Token is back, pass to parent
+		while (token != null) {
+			synchronous {
+				if (fires(parento[0])) {
+					put(parento[0], token);
+					token = null;
+				}
+			}
+		}
+		peeri = {parenti[0]} @ peeri;
+		peero = {parento[0]} @ peero;
+		parenti = {};
+		parento = {};
+	}
+}

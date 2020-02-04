@@ -1,0 +1,42 @@
+#version 100
+
+import std.reo;
+
+composite main() {}
+
+primitive main1(in a, out c) {
+	int x = 0;
+	int y = 0;
+	msg z = null;
+	msg w = null;
+	x = 1;
+	y = 1;
+	while (true) {
+		synchronous {
+			if (x > 0 && fires(a)) {
+				z = get(a);
+				x--;
+			}
+			if (w != null && fires(c)) {
+				put(c, w);
+				w = null;
+				y++;
+			}
+		}
+		synchronous {
+			assert !fires(a) && !fires(c);
+			if (z != null && y > 0) {
+				w = z;
+				z = null;
+				y--;
+				x++;
+			}
+		}
+	}
+}
+
+composite main2(in a, out c) {
+	channel xo -> xi;
+	new fifo(a, xo, null);
+	new fifo(xi, c, null);
+}

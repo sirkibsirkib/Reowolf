@@ -1,0 +1,8 @@
+#version 100
+
+import std.reo;
+
+// duplicate formal parameters
+composite main(in a, out a) {
+	new sync(a, a);
+}

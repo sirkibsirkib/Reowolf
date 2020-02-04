@@ -1,0 +1,6 @@
+#version 100
+
+// unresolved component
+composite main(in a, out b) {
+	sync(a, b);
+}

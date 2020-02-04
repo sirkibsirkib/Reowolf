@@ -1,0 +1,5 @@
+#version 100
+
+primitive main(in a, out b) {
+	break; // illegal
+}

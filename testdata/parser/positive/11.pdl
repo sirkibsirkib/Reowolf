@@ -1,0 +1,17 @@
+#version 100
+
+primitive main(in a, out b) {
+	msg x = null;
+	while (x == null) {
+		synchronous {
+			if (fires(a))
+				x = get(a);
+		}
+	}
+	while (true) {
+		synchronous {
+			if (fires(b))
+				put(b, x);
+		}
+	}
+}

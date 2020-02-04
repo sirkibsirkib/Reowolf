@@ -1,0 +1,19 @@
+#version 100
+
+composite main() {}
+
+int test() {
+	int x = 5;
+l:	while (x < 10) {
+	    if (x % 2 == 0) {
+	        x += 1; // if even, add one, making it odd
+	    } else {
+	        x += 3; // if odd, add three, making it even
+	    }
+	}
+	if (x > 10) {
+	    x -= 10; // keep under 10
+	    goto l;
+	}
+	return x;
+}

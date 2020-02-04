@@ -1,0 +1,14 @@
+#version 100
+
+int main(int a) {
+dupl:
+	while (a >= 2) {
+		a -= 2;
+dupl:	while (a < 10) {
+			a++;
+			if (a % 5 == 0)
+				break dupl;
+		}
+	}
+	goto dupl;
+}

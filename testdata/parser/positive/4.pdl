@@ -1,0 +1,9 @@
+#version 100
+
+import std.reo;
+
+composite main(in a, out b) {
+    msg x = create(1);
+    x[0] = 'X';
+    new fifo(a, b, x);
+}

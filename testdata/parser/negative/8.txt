@@ -1,0 +1,3 @@
+Parse error at 8.pdl:11:1: Defined symbol clash: syncdrain
+primitive syncdrain(in a, in b) {
+^

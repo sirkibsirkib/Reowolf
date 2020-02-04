@@ -1,0 +1,12 @@
+#version 100
+
+composite main() {}
+
+int test() {
+	int x = 5;
+	if (x < 5) {
+	    x = --x;
+	}
+	x++;
+	return x;
+}

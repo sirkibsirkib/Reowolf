@@ -1,0 +1,9 @@
+#version 100
+
+composite main() {}
+
+int test() {
+	int x = 5;
+	x++;
+	return x;
+}

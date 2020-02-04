@@ -1,0 +1,14 @@
+#version 100
+
+int main(int a) {
+outer:
+	while (a >= 2) {
+		a -= 2;
+		while (a < 10) {
+unreach:	a++;
+			if (a % 5 == 0)
+				break outer;
+		}
+	}
+	goto unreach;
+}

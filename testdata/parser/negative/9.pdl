@@ -1,0 +1,9 @@
+#version 100
+
+// node declaration deeply nested in primitive
+primitive main(in a, out b) {
+	while (true) {
+		channel yo -> yi;
+		skip;
+	}
+}

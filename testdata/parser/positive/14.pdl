@@ -1,0 +1,35 @@
+#version 100
+
+composite main(out c) {
+	channel ao -> ai;
+    channel bo -> bi;
+	new sync(ai, bo);
+	new binary_replicator(bi, ao, c);
+}
+
+primitive sync(in a, out b) {
+    while (true) {
+        synchronous {
+            if (fires(a) && fires(b)) {
+            	msg x = get(a);
+            	put(b, x);
+            } else {
+                assert !fires(a) && !fires(b);
+            }
+        }
+    }
+}
+
+primitive binary_replicator(in b, out a, out c) {
+    while (true) {
+        synchronous {
+            if (fires(b) && fires(a) && fires(c)) {
+                msg x = get(b);
+                put(a, x);
+                put(c, x);
+            } else {
+                assert !fires(a) && !fires(b) && !fires(c);
+            }
+        }
+    }
+}

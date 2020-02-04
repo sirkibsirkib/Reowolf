@@ -1,0 +1,3 @@
+Parse error at 20.pdl:6:10: Unindexable expression
+	x[1] = x[1][0:1];
+	        ^

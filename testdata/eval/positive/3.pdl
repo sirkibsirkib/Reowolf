@@ -1,0 +1,13 @@
+#version 100
+
+composite main() {}
+
+int test() {
+	int x = 5;
+	if (x >= 5) { // true
+	    int y = 2;
+	    x -= --y; // --y is 1, so x -= 1 results in 4
+	}
+	x++; // becomes 5
+	return x;
+}

@@ -1,0 +1,3 @@
+Parse error at 12.pdl:6:3: Illegal channel delcaration
+		channel x -> y;
+		^

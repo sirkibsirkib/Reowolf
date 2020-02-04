@@ -1,0 +1,3 @@
+Parse error at 10.pdl:8:5: Illegal nested synchronous statement
+				synchronous {
+				^

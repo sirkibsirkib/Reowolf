@@ -1,0 +1,10 @@
+#version 100
+
+// sync block nested twice in primitive
+primitive main(in a, out b) {
+	while (true) {
+		synchronous {
+			synchronous {}
+		}
+	}
+}

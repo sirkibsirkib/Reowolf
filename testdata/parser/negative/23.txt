@@ -1,0 +1,3 @@
+Parse error at 23.pdl:13:7: Unresolved label
+	goto unreach;
+	     ^

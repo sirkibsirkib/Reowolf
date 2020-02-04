@@ -1,0 +1,3 @@
+Parse error at 30.pdl:6:13: Unresolved variable
+    int z = z; // now allowed
+            ^

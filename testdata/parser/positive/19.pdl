@@ -1,0 +1,11 @@
+#version 100
+
+composite main() {}
+
+primitive example(int a) {
+    synchronous {
+        loop: {
+            goto loop; // allowed
+        }
+    }
+}

@@ -1,0 +1,20 @@
+#version 100
+
+import std.reo;
+
+composite main(in a, out b) {
+	channel c -> d;
+	syncdrain(a, b);
+}
+
+// shadowing import
+primitive syncdrain(in a, in b) {
+	while (true) {
+		synchronous {
+			if (!fires(a) || !fires(b)) {
+				block(a);
+				block(b);
+			}
+		}
+	}
+}

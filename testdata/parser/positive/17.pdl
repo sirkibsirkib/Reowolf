@@ -1,0 +1,50 @@
+#version 100
+
+composite main(in x, out y) {
+	new prophet(x, y);
+}
+
+primitive prophet(in b, out a) {
+	msg c = null;
+	while (true) {
+		if (c != null) {
+			synchronous {
+				assert !fires(a);
+				if (fires(b)) {
+					assert get(b) == c;
+					c = null;
+				}
+			}
+		} else {
+			synchronous (msg x) {
+				assert !fires(b);
+				if (fires(a)) {
+					put(a, x);
+					c = x;
+				}
+			}
+		}
+	}
+}
+
+primitive fifo(in a, out b, msg init) {
+    msg c = init;
+    while (true) {
+        if (c != null) {
+        	synchronous {
+                assert !fires(a);
+                if (fires(b)) {
+                    put(b, c);
+                    c = null;
+                }
+            }
+        } else {
+        	synchronous {
+                assert !fires(b);
+                if (fires(a)) {
+                    c = get(a);
+                }
+            }
+        }
+    }
+}

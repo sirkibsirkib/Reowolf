@@ -1,0 +1,28 @@
+#version
+
+import std.reo;
+
+composite main(out c) {
+	channel ao -> ai;
+	channel bo -> bi;
+	channel axo -> axi;
+	channel zo -> zi;
+	new sync(ai, bo);
+	new replicator(bi, {axo, c});
+	new consensus({axi, zi}, ao);
+	new generator(zo);
+}
+
+primitive generator(out z) {
+	while (true) {
+		synchronous (msg x) {
+			if (x == null) {
+				put(z, x);
+				assert !fires(x);
+			} else {
+				put(z, x);
+				assert fires(x);
+			}
+		}
+	}
+}

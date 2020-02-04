@@ -1,0 +1,13 @@
+#version 100
+
+primitive main(in a) {
+	while (true) {
+		synchronous {
+			if (fires(a)) {
+				return 5;
+			} else {
+				block(a);
+			}
+		}
+	}
+}

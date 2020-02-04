@@ -1,0 +1,7 @@
+#version 100
+
+// illegal builtin
+composite main(in a, out b) {
+	int x = get(a);
+	skip;
+}

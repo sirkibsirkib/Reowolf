@@ -1,0 +1,37 @@
+#version 100
+
+composite main() {
+	channel xo -> xi;
+	new a(xi);
+	new c(xo);
+}
+
+primitive a(in x) {
+	synchronous {
+		msg m = get(x);
+		assert m.length == 5;
+		assert m[0] == 'h';
+		assert m[1] == 'e';
+		assert m[2] == 'l';
+		assert m[3] == 'l';
+		assert m[4] == 'o';
+	}
+}
+
+primitive b(out x) {
+	synchronous (msg m) {
+		put(x, m);
+	}
+}
+// or
+primitive c(out x) {
+	synchronous {
+		msg m = create(5);
+		m[0] = 'h';
+		m[1] = 'e';
+		m[2] = 'l';
+		m[3] = 'l';
+		m[4] = 'o';
+		put(x, m);
+	}
+}

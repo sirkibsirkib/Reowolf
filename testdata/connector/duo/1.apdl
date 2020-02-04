@@ -1,0 +1,23 @@
+// Network Topology:
+//  two nodes, a and b, and two channels
+// Node a:
+//  Two ports, a0 and a1, where a0 is passive and a1 is active
+// Node b:
+//  Two ports, b0 and b1, where b0 is active and b1 is passive
+// Channel a0--b0, where b0 initiates
+// Channel a1--b1, where a1 initiates
+
+primitive main(in a0, in a1) {
+    while (true) {
+        synchronous {
+            if (fires(a0)) {
+                msg x = get(a0);
+            }
+        }
+        synchronous {
+            if (fires(a1)) {
+                msg y = get(a1);
+            }
+        }
+    }
+}

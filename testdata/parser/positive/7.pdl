@@ -1,0 +1,82 @@
+#version 100
+
+/*
+Suggested by Benjamin Lion.
+Source: http://www.wisdom.weizmann.ac.il/~naor/PUZZLES/compare.html
+
+Bob comes to Ron, a manager at his company, with a complaint about a
+sensitive matter; he asks Ron to keep his identity confidential. A few
+months later, Moshe (another manager) tells Ron that someone has
+complained to him, also with a confidentiality request, about the same
+matter.
+
+Ron and Moshe would like to determine whether the same person has
+complained to each of them, but, if there are two complainers, Ron and
+Moshe want to give no information to each other about their identities.
+
+The protocol typically used in a situation like this one is akin to the
+game ``twenty questions,'' but goes by the name of ``delicate
+conversational probing.'' Ron might ask Moshe if Moshe's complainer is
+male, and if the answer is ``yes'' Moshe might then ask Ron if Ron's
+complainer's surname begins with a letter preceding ``M'' in the
+alphabet. This goes on until Ron and Moshe have ascertained whether they
+have the same person in mind. When they do not, however (particularly
+when the first ``no'' occurs late in the game) a great deal of
+information may have been exchanged.
+
+What can Ron and Moshe do in order not leak more information than necessary?
+
+Here is one of our favorite solutions suggested by Miki Ajtai of the IBM
+Almaden Research Center. His proposal is "physical" in the sense that
+Ron and Moshe must be together. We need to assume that there is a fairly
+small pool of candidates, say twenty. Ron and Moshe obtain twenty
+identical containers (perhaps by purchasing disposable cups (paper or
+plastic)), arrange them in a line, and write labels in front of each
+cup, one for each candidate. Ron then puts a folded slip of paper saying
+``Yes'' in the cup of the person who complained to him, and a slip
+saying ``No'' in the other nineteen cups. Moshe does the same. Ron and
+Moshe then remove the labels, and shuffle the cups at random. They then
+look inside the cups to see whether one of them contains two slips
+saying ``Yes'' and decide accordingly.
+*/
+
+composite main() {}
+
+composite puzzle(in[] a, in[] b, out x) {
+	new async(a);
+	new async(b);
+	new resolve(a, b, x);
+}
+
+primitive resolve(in[] a, in[] b, out x) {
+	while (true) {
+		synchronous {
+			int i = 0;
+			while (i < a.length && i < b.length) {
+				if (fires(a[i]) && fires(b[i])) {
+					put(x, create(0)); // send token to x
+					goto end;
+				}
+				i++;
+			}
+			assert !fires(x);
+			end: skip;
+		}
+	}
+}
+
+primitive async(in[] a) {
+	while (true) {
+		synchronous {
+			int i = 0;
+			int j = 0;
+			while (i < a.length) {
+				if (fires(a[i])) break;
+				i++;
+			}
+			while (j < a.length) {
+				assert i == j || !fires(a[j]);
+			}
+		}
+	}
+}

@@ -1,0 +1,14 @@
+#version 100
+
+primitive main(in a, out b) {
+	int x = 0;
+	int y = 0;
+	x += y + 5;
+	y %= x -= 3;
+	x *= x * x *= 5;
+	while (true) {
+		synchronous {
+			assert fires(a) == fires(b);
+		}
+	}
+}

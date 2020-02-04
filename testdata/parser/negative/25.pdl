@@ -1,0 +1,11 @@
+#version 100
+
+primitive main(in a, out b) {
+	int x = 0;
+	int y = 0;
+	while (true) {
+		synchronous (int x) { // illegal
+			assert fires(a) == fires(b);
+		}
+	}
+}

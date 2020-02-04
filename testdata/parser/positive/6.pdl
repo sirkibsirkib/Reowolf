@@ -1,0 +1,89 @@
+#version 100
+
+composite main(in a1, in a2, in a3, out b1, out b2) {
+	new reonode({a1, a2, a3}, {b1, b2});
+}
+
+composite reonode(in[] a, out[] b) {
+	channel co -> ci;
+	new merger(a, co);
+	new replicator(ci, b);
+}
+
+composite replicator(in a, out[] b) {
+	if (b.length == 0) {
+		new blocking(a);
+	} else if (b.length == 1) {
+		new sync(a, b[0]);
+	} else {
+		channel xo -> xi;
+		new binary_replicator(a, b[0], xo);
+		new replicator(xi, b[1 : b.length - 1]);
+	}
+}
+primitive binary_replicator(in a, out b, out c) {
+    while (true) {
+        synchronous {
+            if (fires(a) && fires(b) && fires(c)) {
+                msg x = get(a);
+                put(b, x);
+                put(c, x);
+            } else {
+                assert !fires(a) && !fires(b) && !fires(c);
+            }
+        }
+    }
+}
+primitive blocking(in a) {
+	while (true) synchronous {
+		assert !fires(a);
+	}
+}
+
+composite merger(in[] a, out b) {
+	if (a.length == 0) {
+		new silent(b);
+	} else {
+		in prev = a[0];
+		int i = 1;
+		while (i < a.length) {
+			channel yi -> yo;
+			new binary_merger(prev, a[i], yo);
+			prev = yi;
+			i++;
+		}
+		new sync(prev, b);
+	}
+}
+primitive binary_merger(in a, in b, out c) {
+    while (true) {
+        synchronous {
+            if (fires(a) && fires(c)) {
+                assert !fires(b);
+                put(c, get(a));
+            } else if (fires(b) && fires(c)) {
+                assert !fires(a);
+                put(c, get(b));
+            } else {
+                assert !fires(a) && !fires(b) && !fires(c);
+            }
+        }
+    }
+}
+primitive silent(out a) {
+	while (true) synchronous {
+		assert !fires(a);
+	}
+}
+
+primitive sync(in a, out b) {
+    while (true) {
+        synchronous {
+            if (fires(a) && fires(b)) {
+            	put(b, get(a));
+            } else {
+                assert !fires(a) && !fires(b);
+            }
+        }
+    }
+}

@@ -1,0 +1,57 @@
+#version 100
+
+import std.reo;
+
+composite main(in ai, out ao, in bi, out bo, in ci, out co, in di, out do) {
+    // Three parts:
+    channel xo -> xi;
+    {
+        channel afo -> aii;
+        channel bfo -> bii;
+        channel cfo -> cii;
+        channel dfo -> dii;
+        // Part 1. Collect all in msgs.
+        new fifo(ai, afo, null);
+        new fifo(bi, bfo, null);
+        new fifo(ci, cfo, null);
+        new fifo(di, dfo, null);
+        // Part 2. Compute maximum.
+        new computeMax(aii, bii, cii, dii, xo);
+    }
+    // Part 3. Send maximum to all out msgs, and repeat.
+    {
+        channel xxo -> xxi;
+        channel xxxo -> xxxi;
+        new replicator(xi, xxo, ao);
+        new replicator(xxi, xxxo, bo);
+        new replicator(xxxi, co, do);
+    }
+}
+
+primitive computeMax(in a, in b, in c, in d, out x) {
+	while (true) {
+		synchronous {
+            if (fires(a) && fires(b) && fires(c) && fires(d) && fires(x)) {
+            	msg aa = get(a);
+            	msg bb = get(b);
+            	msg cc = get(c);
+            	msg dd = get(d);
+            	uint16_t aaa = aa[0] & aa[1] << 8;
+                uint16_t bbb = bb[0] & bb[1] << 8;
+                uint16_t ccc = cc[0] & cc[1] << 8;
+                uint16_t ddd = dd[0] & dd[1] << 8;
+                // broadcast message with highest header
+                uint16_t max = aaa;
+                if (bbb > max) max = bbb;
+                if (ccc > max) max = ccc;
+                if (ddd > max) max = ddd;
+                if (max == aaa) put(x, aa);
+                else if (max == bbb) put(x, bb);
+                else if (max == ccc) put(x, cc);
+                else if (max == ddd) put(x, dd);
+            } else {
+	            assert !fires(a) && !fires(b) && !fires(c) && !fires(d) && !fires(x);
+            }
+        }
+    }
+}

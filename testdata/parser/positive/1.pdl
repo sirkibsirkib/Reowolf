@@ -1,0 +1,93 @@
+#version 100
+
+composite main(in asend, out arecv, in bsend, out brecv) {
+    channel xo -> xi;
+    channel yo -> yi;
+    new replicator(asend, xo, brecv);
+    new replicator(bsend, yo, arecv);
+    // x fires first, then y, then x, et cetera
+    new sequencer(xi, yi);
+}
+
+primitive replicator(in a, out b, out c) {
+    while (true) {
+        synchronous {
+            if (fires(a) && fires(b) && fires(c)) {
+                msg x = get(a);
+                put(b, x);
+                put(c, x);
+            } else {
+                assert !fires(a) && !fires(b) && !fires(c);
+            }
+        }
+    }
+}
+
+composite sequencer(in x, in y) {
+    channel ao -> ai;
+    channel bo -> bi;
+    channel co -> ci;
+    channel do -> di;
+    channel eo -> ei;
+    channel fo -> fi;
+    new syncdrain(x, ai);
+    new syncdrain(y, bi);
+    new replicator(ei, ao, co);
+    new replicator(fi, bo, do);
+    new fifo(ci, fo, null);
+    new fifo(di, eo, create(0));
+}
+
+primitive syncdrain(in a, in b) {
+    while (true) {
+        synchronous {
+            if (fires(a) && fires(b)) {
+                get(a);
+                get(b);
+            } else {
+                assert !fires(a) && !fires(b);
+            }
+        }
+    }
+}
+
+primitive fifo(in a, out b, msg init) {
+    msg c = init;
+    while (true) {
+        synchronous {
+            if (c != null) {
+                assert !fires(a);
+                if (fires(b)) {
+                    put(b, c);
+                    c = null;
+                }
+            } else {
+                assert !fires(b);
+                if (fires(a)) {
+                    c = get(a);
+                }
+            }
+        }
+    }
+}
+
+primitive sequencer2(in x, in y) {
+	while (true) {
+	    boolean b = false;
+		while (!b) {
+			synchronous {
+				assert !fires(y);
+				if (fires(x))
+					b = true;
+			}
+		}
+		b = false;
+		while (!b) {
+			synchronous {
+				assert !fires(x);
+				if (fires(y))
+					b = true;
+			}
+		}
+	}
+}

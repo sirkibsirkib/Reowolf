@@ -1,0 +1,3 @@
+Parse error at 17.pdl:7:4: Unassignable expression
+	x + y = 0;
+	  ^

@@ -1,0 +1,9 @@
+#version 100
+
+// illegal node declaration
+primitive main(in a, out b) {
+	while (true) {
+		channel x -> y;
+		synchronous {}
+	}
+}

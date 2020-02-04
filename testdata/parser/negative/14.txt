@@ -1,0 +1,3 @@
+Parse error at 14.pdl:5:10: Illegal built-in occurrence
+	int x = get(a);
+	        ^

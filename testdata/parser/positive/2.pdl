@@ -1,0 +1,29 @@
+#version 100
+
+import std.reo;
+
+composite main(in asend, out arecv, in bsend, out brecv, in csend, out crecv) {
+    channel xo -> xi;
+    channel yo -> yi;
+    channel zo -> zi;
+    // Every synchronous round, at most one message is sent (to determine a global order)
+    new mymerger(asend, bsend, xo);
+    new mymerger(csend, xi, yo);
+    // If a message is sent, it is broadcast to every recipient
+    new replicator(yi, {arecv, zo});
+    new replicator(zi, {brecv, crecv});
+}
+
+primitive mymerger(in a, in b, out c) {
+    while (true) {
+        synchronous {
+            if (fires(a) && !fires(b) && fires(c)) {
+                put(c, get(a));
+            } else if (!fires(a) && fires(b) && fires(c)) {
+                put(c, get(b));
+            } else {
+            	assert !fires(a) && !fires(b) && !fires(c);
+            }
+        }
+    }
+}
