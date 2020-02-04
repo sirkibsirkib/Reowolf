@@ -1,0 +1,32 @@
+[package]
+name = "reowolf_rs"
+version = "0.1.0"
+authors = ["Christopher Esterhuyse <christopher.esterhuyse@gmail.com>", "Hans-Dieter Hiep <hdh@cwi.nl>"]
+edition = "2018"
+
+[dependencies]
+
+getrandom = "0.1.14" # tiny crate. used to guess controller-id
+take_mut = "0.2.2"
+maplit = "1.0.2" # convenience macros
+indexmap = "1.3.0" # hashsets with efficient arbitrary element removal
+
+# network stuff
+integer-encoding = "1.0.7"
+byteorder = "1.3.2"
+mio = "0.6.21" # migrate to mio 0.7.0 when it stabilizes. It's much better.
+mio-extras = "2.0.6"
+
+# protocol stuff
+id-arena = "2.2.1"
+backtrace = "0.3"
+
+[dev-dependencies]
+test-generator = "0.3.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = ["ffi"]
+ffi = []
