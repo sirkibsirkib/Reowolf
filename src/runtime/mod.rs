@@ -406,11 +406,10 @@ impl Predicate {
         }
     }
 
-    pub fn iter_true(&self) -> impl Iterator<Item = ChannelId> + '_ {
-        self.assigned.iter().filter_map(|(&channel_id, b)| match b {
-            true => Some(channel_id),
-            false => None,
-        })
+    pub fn iter_matching(&self, value: bool) -> impl Iterator<Item = ChannelId> + '_ {
+        self.assigned
+            .iter()
+            .filter_map(move |(&channel_id, &b)| if b == value { Some(channel_id) } else { None })
     }
 
     pub fn batch_assign_nones(

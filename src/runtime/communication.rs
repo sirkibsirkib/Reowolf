@@ -6,30 +6,21 @@ impl Controller {
         let cid = self.inner.channel_id_stream.controller_id;
         lockprintln!("{:?}: ENDING ROUND WITH DECISION! {:?}", cid, &decision);
 
-        let mut all_inboxes = HashMap::default();
+        let mut table_row = HashMap::default();
         self.inner.mono_n = self
             .ephemeral
             .poly_n
             .take()
-            .map(|poly_n| poly_n.become_mono(&decision, &mut all_inboxes));
+            .map(|poly_n| poly_n.become_mono(&decision, &mut table_row));
         self.inner.mono_ps.extend(
-            self.ephemeral.poly_ps.drain(..).map(|m| m.become_mono(&decision, &mut all_inboxes)),
+            self.ephemeral.poly_ps.drain(..).map(|m| m.become_mono(&decision, &mut table_row)),
         );
-        let valuations: HashMap<_, _> = all_inboxes
-            .drain()
-            .map(|(ekey, payload)| {
-                let channel_id = self.inner.endpoint_exts.get(ekey).unwrap().info.channel_id;
-                (channel_id, Some(payload))
-            })
-            .collect();
-        for (channel_id, value) in decision.assigned.iter() {
-            if !value {
-                lockprintln!("{:?}: VALUE {:?} => *", cid, channel_id);
-            } else if let Some(payload) = valuations.get(channel_id) {
-                lockprintln!("{:?}: VALUE {:?} => Message({:?})", cid, channel_id, payload);
-            } else {
-                lockprintln!("{:?}: VALUE {:?} => Message(?)", cid, channel_id);
-            }
+        for (ekey, payload) in table_row {
+            let channel_id = self.inner.endpoint_exts.get(ekey).unwrap().info.channel_id;
+            lockprintln!("{:?}: VALUE {:?} => Message({:?})", cid, channel_id, payload);
+        }
+        for channel_id in decision.iter_matching(false) {
+            lockprintln!("{:?}: VALUE {:?} => *", cid, channel_id);
         }
         let announcement =
             CommMsgContents::Announce { oracle: decision }.into_msg(self.inner.round_index);
@@ -446,6 +437,7 @@ impl Into<PolyP> for MonoP {
                 BranchP {
                     state: self.state,
                     inbox: Default::default(),
+                    outbox: Default::default(),
                 }
             },
             ekeys: self.ekeys,
