@@ -3,6 +3,9 @@ use crate::runtime::{actors::*, endpoint::*, errors::*, *};
 
 impl Controller {
     fn end_round_with_decision(&mut self, decision: Predicate) -> Result<(), SyncErr> {
+        let cid = self.inner.channel_id_stream.controller_id;
+        lockprintln!("{:?}: ENDING ROUND WITH DECISION! {:?}", cid, &decision);
+
         let mut all_inboxes = HashMap::default();
         self.inner.mono_n = self
             .ephemeral
@@ -21,16 +24,22 @@ impl Controller {
             .collect();
         for (channel_id, value) in decision.assigned.iter() {
             if !value {
-                println!("VALUE {:?} => *", channel_id);
+                lockprintln!("{:?}: VALUE {:?} => *", cid, channel_id);
             } else if let Some(payload) = valuations.get(channel_id) {
-                println!("VALUE {:?} => Message({:?})", channel_id, payload);
+                lockprintln!("{:?}: VALUE {:?} => Message({:?})", cid, channel_id, payload);
             } else {
-                println!("VALUE {:?} => Message(?)", channel_id);
+                lockprintln!("{:?}: VALUE {:?} => Message(?)", cid, channel_id);
             }
         }
         let announcement =
             CommMsgContents::Announce { oracle: decision }.into_msg(self.inner.round_index);
         for &child_ekey in self.inner.family.children_ekeys.iter() {
+            lockprintln!(
+                "{:?}: Forwarding {:?} to child with ekey {:?}",
+                cid,
+                &announcement,
+                child_ekey
+            );
             self.inner
                 .endpoint_exts
                 .get_mut(child_ekey)
@@ -45,6 +54,7 @@ impl Controller {
 
     // Drain self.ephemeral.solution_storage and handle the new locals. Return decision if one is found
     fn handle_locals_maybe_decide(&mut self) -> Result<bool, SyncErr> {
+        let cid = self.inner.channel_id_stream.controller_id;
         if let Some(parent_ekey) = self.inner.family.parent_ekey {
             // I have a parent -> I'm not the leader
             let parent_endpoint =
@@ -52,6 +62,7 @@ impl Controller {
             for partial_oracle in self.ephemeral.solution_storage.iter_new_local_make_old() {
                 let msg =
                     CommMsgContents::Elaborate { partial_oracle }.into_msg(self.inner.round_index);
+                lockprintln!("{:?}: Sending {:?} to parent {:?}", cid, &msg, parent_ekey);
                 parent_endpoint.send(msg)?;
             }
             Ok(false)
@@ -60,6 +71,7 @@ impl Controller {
             assert!(self.inner.family.parent_ekey.is_none());
             let maybe_decision = self.ephemeral.solution_storage.iter_new_local_make_old().next();
             Ok(if let Some(decision) = maybe_decision {
+                lockprintln!("{:?}: DECIDE ON {:?} AS LEADER!", cid, &decision);
                 self.end_round_with_decision(decision)?;
                 true
             } else {

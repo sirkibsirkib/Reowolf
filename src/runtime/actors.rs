@@ -100,17 +100,41 @@ impl PolyP {
                 }
                 Sb::SyncBlockEnd => {
                     // come up with the predicate for this local solution
-                    let ekeys_channel_id_iter = self
-                        .ekeys
-                        .iter()
-                        .map(|&ekey| m_ctx.inner.endpoint_exts.get(ekey).unwrap().info.channel_id);
+                    let lookup =
+                        |&ekey| m_ctx.inner.endpoint_exts.get(ekey).unwrap().info.channel_id;
+                    let ekeys_channel_id_iter = self.ekeys.iter().map(lookup);
                     predicate.batch_assign_nones(ekeys_channel_id_iter, false);
-                    // report the local solution
-                    m_ctx
-                        .solution_storage
-                        .submit_and_digest_subtree_solution(m_ctx.my_subtree_id, predicate.clone());
-                    // store the solution for recovering later
-                    self.complete.insert(predicate, branch);
+
+                    lockprintln!(
+                        "{:?}: ~ ... ran PolyP {:?} with branch pred {:?} to blocker {:?}",
+                        cid,
+                        m_ctx.my_subtree_id,
+                        &predicate,
+                        &blocker
+                    );
+
+                    // OK now check we really received all the messages we expected to
+                    if predicate.iter_true().count() == branch.inbox.keys().map(lookup).count() {
+                        lockprintln!(
+                            "{:?}: {:?} with pred {:?} finished! Storing this solution locally.",
+                            cid,
+                            m_ctx.my_subtree_id,
+                            &predicate,
+                        );
+                        m_ctx.solution_storage.submit_and_digest_subtree_solution(
+                            m_ctx.my_subtree_id,
+                            predicate.clone(),
+                        );
+                        // store the solution for recovering later
+                        self.complete.insert(predicate, branch);
+                    } else {
+                        lockprintln!(
+                            "{:?}: {:?} with pred {:?} finished but was missing a GET. Pruning.",
+                            cid,
+                            m_ctx.my_subtree_id,
+                            &predicate,
+                        );
+                    }
                 }
                 Sb::PutMsg(ekey, payload) => {
                     assert!(self.ekeys.contains(&ekey));
@@ -198,8 +222,8 @@ impl PolyP {
                             lockprintln!(
                                 "{:?}: ... poly_recv_run payloadpred {:?} and branchpred {:?} satisfied by new pred {:?}. FORKING",
                                 cid,
-                                &old_predicate,
                                 &payload_predicate,
+                                &old_predicate,
                                 &new,
                             );
                             // payload_predicate has new assumptions. FORK!

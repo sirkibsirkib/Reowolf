@@ -406,6 +406,13 @@ impl Predicate {
         }
     }
 
+    pub fn iter_true(&self) -> impl Iterator<Item = ChannelId> + '_ {
+        self.assigned.iter().filter_map(|(&channel_id, b)| match b {
+            true => Some(channel_id),
+            false => None,
+        })
+    }
+
     pub fn batch_assign_nones(
         &mut self,
         channel_ids: impl Iterator<Item = ChannelId>,
