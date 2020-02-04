@@ -438,7 +438,13 @@ impl Predicate {
 impl Debug for Predicate {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         for (ChannelId { controller_id, channel_index }, &v) in self.assigned.iter() {
-            write!(f, "{:?}=>{}", (controller_id, channel_index), if v { 'T' } else { 'F' })?;
+            write!(
+                f,
+                "({:?},{:?})=>{}, ",
+                controller_id,
+                channel_index,
+                if v { 'T' } else { 'F' }
+            )?;
         }
         Ok(())
     }

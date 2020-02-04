@@ -1,14 +1,6 @@
 use crate::common::*;
 use crate::runtime::{actors::*, endpoint::*, errors::*, *};
 
-macro_rules! lockprintln {
-    () => (print!("\n"));
-    ($($arg:tt)*) => ({
-        use std::io::Write;
-        std::writeln!(std::io::stdout().lock(), $($arg)*).expect("LPRINTLN");
-    })
-}
-
 impl Controller {
     fn end_round_with_decision(&mut self, decision: Predicate) -> Result<(), SyncErr> {
         let mut all_inboxes = HashMap::default();

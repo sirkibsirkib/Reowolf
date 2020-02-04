@@ -141,14 +141,31 @@ impl PolyP {
         payload: Payload,
     ) -> Result<SyncRunResult, EndpointErr> {
         // try exact match
+        let cid = m_ctx.inner.channel_id_stream.controller_id;
+
         let to_run = if self.complete.contains_key(&payload_predicate) {
             // exact match with stopped machine
+
+            lockprintln!(
+                "{:?}: ... poly_recv_run matched stopped machine exactly! nothing to do here",
+                cid,
+            );
             vec![]
         } else if let Some(mut branch) = self.incomplete.remove(&payload_predicate) {
             // exact match with running machine
+
+            lockprintln!(
+                "{:?}: ... poly_recv_run matched running machine exactly! pred is {:?}",
+                cid,
+                &payload_predicate
+            );
             branch.inbox.insert(ekey, payload);
             vec![(payload_predicate, branch)]
         } else {
+            lockprintln!(
+                "{:?}: ... poly_recv_run didn't have any exact matches... Let's try feed it to all branches",
+                cid,
+            );
             let mut incomplete2 = HashMap::<_, _>::default();
             let to_run = self
                 .incomplete
@@ -157,12 +174,25 @@ impl PolyP {
                     use CommonSatResult as Csr;
                     match old_predicate.common_satisfier(&payload_predicate) {
                         Csr::FormerNotLatter | Csr::Equivalent => {
+                            lockprintln!(
+                                "{:?}: ... poly_recv_run This branch is compatible unaltered! branch pred: {:?}",
+                                cid,
+                                &old_predicate
+                            );
                             // old_predicate COVERS the assumptions of payload_predicate
                             let was = branch.inbox.insert(ekey, payload.clone());
                             assert!(was.is_none()); // INBOX MUST BE EMPTY!
                             Some((old_predicate, branch))
                         }
-                        Csr::New(unified) => {
+                        Csr::New(new) => {
+
+                            lockprintln!(
+                                "{:?}: ... poly_recv_run payloadpred {:?} and branchpred {:?} satisfied by new pred {:?}. FORKING",
+                                cid,
+                                &old_predicate,
+                                &payload_predicate,
+                                &new,
+                            );
                             // payload_predicate has new assumptions. FORK!
                             let mut payload_branch = branch.clone();
                             let was = payload_branch.inbox.insert(ekey, payload.clone());
@@ -170,9 +200,16 @@ impl PolyP {
 
                             // put the original back untouched
                             incomplete2.insert(old_predicate, branch);
-                            Some((unified, payload_branch))
+                            Some((new, payload_branch))
                         }
                         Csr::LatterNotFormer => {
+
+                            lockprintln!(
+                                "{:?}: ... poly_recv_run payloadpred {:?} subsumes branch pred {:?}. FORKING",
+                                cid,
+                                &old_predicate,
+                                &payload_predicate,
+                            );
                             // payload_predicate has new assumptions. FORK!
                             let mut payload_branch = branch.clone();
                             let was = payload_branch.inbox.insert(ekey, payload.clone());
@@ -183,6 +220,12 @@ impl PolyP {
                             Some((payload_predicate.clone(), payload_branch))
                         }
                         Csr::Nonexistant => {
+                            lockprintln!(
+                                "{:?}: ... poly_recv_run SKIPPING because branchpred={:?}. payloadpred={:?}",
+                                cid,
+                                &old_predicate,
+                                &payload_predicate,
+                            );
                             // predicates contradict
                             incomplete2.insert(old_predicate, branch);
                             None
@@ -193,6 +236,7 @@ impl PolyP {
             std::mem::swap(&mut self.incomplete, &mut incomplete2);
             to_run
         };
+        lockprintln!("{:?}: ... DONE FEEDING BRANCHES. {} branches to run!", cid, to_run.len(),);
         self.poly_run_these_branches(m_ctx, protocol_description, to_run)
     }
 

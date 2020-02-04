@@ -1,3 +1,10 @@
+macro_rules! lockprintln {
+    () => (print!("\n"));
+    ($($arg:tt)*) => ({
+        use std::io::Write;
+        std::writeln!(std::io::stdout().lock(), $($arg)*).expect("LPRINTLN");
+    })
+}
 macro_rules! assert_let {
     ($pat:pat = $expr:expr => $work:expr) => {
         if let $pat = $expr {
