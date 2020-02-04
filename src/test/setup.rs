@@ -83,7 +83,7 @@ fn config_and_connect_chain() {
         }),
         thread::spawn(move || {
             // FORWARDER ->B->
-            let mut x = Connector::Unconfigured(Unconfigured { controller_id: 0 });
+            let mut x = Connector::Unconfigured(Unconfigured { controller_id: 1 });
             x.configure(b"primitive main(in a, out b) {}").unwrap();
             x.bind_port(0, Passive(addrs[0])).unwrap();
             x.bind_port(1, Active(addrs[1])).unwrap();
