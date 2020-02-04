@@ -89,13 +89,13 @@ pub trait MonoContext {
 
     fn new_component(&mut self, moved_keys: HashSet<Key>, init_state: Self::S);
     fn new_channel(&mut self) -> [Key; 2];
-    fn new_random(&self) -> u64;
+    fn new_random(&mut self) -> u64;
 }
 pub trait PolyContext {
     type D: ProtocolDescription;
 
-    fn is_firing(&self, ekey: Key) -> Option<bool>;
-    fn read_msg(&self, ekey: Key) -> Option<&Payload>;
+    fn is_firing(&mut self, ekey: Key) -> Option<bool>;
+    fn read_msg(&mut self, ekey: Key) -> Option<&Payload>;
 }
 
 ///////////////////// IMPL /////////////////////

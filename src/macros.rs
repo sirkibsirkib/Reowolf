@@ -1,10 +1,3 @@
-macro_rules! lockprintln {
-    () => (print!("\n"));
-    ($($arg:tt)*) => ({
-        use std::io::Write;
-        std::writeln!(std::io::stdout().lock(), $($arg)*).expect("LPRINTLN");
-    })
-}
 macro_rules! log {
     ($logger:expr, $($arg:tt)*) => {{
         use std::fmt::Write;
