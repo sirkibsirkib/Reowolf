@@ -79,9 +79,20 @@ impl PolyP {
                     assert!(self.ekeys.contains(&ekey));
                     let channel_id =
                         r_ctx.m_ctx.inner.endpoint_exts.get(ekey).unwrap().info.channel_id;
+                    lockprintln!(
+                        "{:?}: ~ ... {:?} couldnt read msg for port {:?}. has inbox {:?}",
+                        cid,
+                        m_ctx.my_subtree_id,
+                        channel_id,
+                        &branch.inbox,
+                    );
                     if predicate.replace_assignment(channel_id, true) != Some(false) {
                         // don't rerun now. Rerun at next `sync_run`
+
+                        lockprintln!("{:?}: ~ ... Delay {:?}", cid, m_ctx.my_subtree_id,);
                         self.incomplete.insert(predicate, branch);
+                    } else {
+                        lockprintln!("{:?}: ~ ... Drop {:?}", cid, m_ctx.my_subtree_id,);
                     }
                     // ELSE DROP
                 }
