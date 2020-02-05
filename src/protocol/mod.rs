@@ -15,8 +15,7 @@ use std::hint::unreachable_unchecked;
 pub struct ProtocolDescriptionImpl {
     heap: Heap,
     source: InputSource,
-    root: RootId,
-    main: ComponentId,
+    root: RootId
 }
 
 impl std::fmt::Debug for ProtocolDescriptionImpl {
@@ -34,11 +33,7 @@ impl ProtocolDescription for ProtocolDescriptionImpl {
         let mut parser = Parser::new(&mut source);
         match parser.parse(&mut heap) {
             Ok(root) => {
-                // Find main definition (grammar rule ensures this exists)
-                let sym = heap.get_external_identifier(b"main");
-                let def = heap[root].get_definition(&heap, sym.upcast()).unwrap();
-                let main = heap[def].as_component().this();
-                return Ok(ProtocolDescriptionImpl { heap, source, root, main });
+                return Ok(ProtocolDescriptionImpl { heap, source, root });
             }
             Err(err) => {
                 let mut vec: Vec<u8> = Vec::new();
@@ -64,12 +59,23 @@ impl ProtocolDescription for ProtocolDescriptionImpl {
     //     }
     //     result
     // }
-    fn new_main_component(&self, ports: &[Key]) -> ComponentStateImpl {
+    fn new_main_component(&self, identifier: &[u8], ports: &[(Polarity, Key)]) -> Result<ComponentStateImpl, NewMainErr> {
+        // Find symbol with identifier
+        let def = self.heap[self.root].get_definition_ident(&heap, identifier);
+        if def.is_none() {
+            return Err(NewMainErr::NoSuchComponent);
+        }
+        let def = &self.heap[def.unwrap()];
+        if !def.is_component() {
+            return Err(NewMainErr::NoSuchComponent);
+        }
+        let main = def.as_component().this();
+        //
         let mut args = Vec::new();
-        for (&x, y) in ports.iter().zip(self.main_interface_polarities()) {
-            match y {
-                Polarity::Getter => args.push(Value::Input(InputValue(x))),
-                Polarity::Putter => args.push(Value::Output(OutputValue(x))),
+        for &(x, y) in ports.iter() {
+            match x {
+                Polarity::Getter => args.push(Value::Input(InputValue(y))),
+                Polarity::Putter => args.push(Value::Output(OutputValue(y))),
             }
         }
         ComponentStateImpl { prompt: Prompt::new(&self.heap, self.main.upcast(), &args) }

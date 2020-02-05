@@ -1220,6 +1220,14 @@ impl Root {
         }
         None
     }
+    pub fn get_definition_ident(&self, h: &Heap, id: &[u8]) -> Option<DefinitionId> {
+        for &def in self.definitions.iter() {
+            if h[h[def].identifier()].ident() == id {
+                return Some(def);
+            }
+        }
+        None
+    }
     pub fn get_declaration(&self, h: &Heap, id: IdentifierId) -> Option<DeclarationId> {
         for &decl in self.declarations.iter() {
             if h[h[decl].identifier()] == h[id] {

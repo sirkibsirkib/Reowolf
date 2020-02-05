@@ -1784,40 +1784,6 @@ impl Visitor for SelectableExpressions {
     }
 }
 
-struct CheckMainComponent {}
-
-impl CheckMainComponent {
-    fn new() -> Self {
-        CheckMainComponent {}
-    }
-    fn visit_protocol_description(&mut self, h: &mut Heap, root: RootId) -> VisitorResult {
-        let sym = h.get_external_identifier(b"main");
-        let root = &h[root];
-        let def = root.get_definition(h, sym.upcast());
-        if def.is_none() {
-            return Err(ParseError::new(root.position, "Missing main definition"));
-        }
-        let def = &h[def.unwrap()];
-        if !def.is_component() {
-            return Err(ParseError::new(def.position(), "Main definition must be a component"));
-        }
-        for &param in def.parameters().iter() {
-            let param = &h[param];
-            let type_annot = &h[param.type_annotation];
-            if type_annot.the_type.array {
-                return Err(ParseError::new(type_annot.position, "Illegal type"));
-            }
-            match type_annot.the_type.primitive {
-                PrimitiveType::Input | PrimitiveType::Output => continue,
-                _ => {
-                    return Err(ParseError::new(type_annot.position, "Illegal type"));
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
 pub struct Parser<'a> {
     source: &'a mut InputSource,
 }
@@ -1844,7 +1810,6 @@ impl<'a> Parser<'a> {
         AssignableExpressions::new().visit_protocol_description(h, pd)?;
         IndexableExpressions::new().visit_protocol_description(h, pd)?;
         SelectableExpressions::new().visit_protocol_description(h, pd)?;
-        CheckMainComponent::new().visit_protocol_description(h, pd)?;
         Ok(pd)
     }
 }
