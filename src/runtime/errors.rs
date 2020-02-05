@@ -4,7 +4,6 @@ use crate::common::*;
 pub enum PortBindErr {
     AlreadyConnected,
     IndexOutOfBounds,
-    PortAlreadyBound,
     NotConfigured,
     ParseErr,
     AlreadyConfigured,
