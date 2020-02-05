@@ -384,7 +384,11 @@ impl PolyN {
         decision: &Predicate,
         table_row: &mut HashMap<Key, Payload>,
     ) -> MonoN {
-        if let Some((_, branch)) = self.branches.drain().find(|(p, _)| decision.satisfies(p)) {
+        if let Some((_, branch)) = self
+            .branches
+            .drain()
+            .find(|(p, branch)| branch.to_get.is_empty() && decision.satisfies(p))
+        {
             let BranchN { gotten, sync_batch_index, .. } = branch;
             for (&key, payload) in gotten.iter() {
                 assert!(table_row.insert(key, payload.clone()).is_none());

@@ -15,7 +15,7 @@ use std::hint::unreachable_unchecked;
 pub struct ProtocolDescriptionImpl {
     heap: Heap,
     source: InputSource,
-    root: RootId
+    root: RootId,
 }
 
 impl std::fmt::Debug for ProtocolDescriptionImpl {
@@ -86,15 +86,13 @@ impl ProtocolDescription for ProtocolDescriptionImpl {
         for (&x, y) in ports.iter().zip(self.component_polarities(identifier).unwrap()) {
             match y {
                 Polarity::Getter => args.push(Value::Input(InputValue(x))),
-                Polarity::Putter => args.push(Value::Output(OutputValue(x)))
+                Polarity::Putter => args.push(Value::Output(OutputValue(x))),
             }
         }
         let h = &self.heap;
         let root = &h[self.root];
         let def = root.get_definition_ident(h, identifier).unwrap();
-        ComponentStateImpl {
-            prompt: Prompt::new(h, def, &args)
-        }
+        ComponentStateImpl { prompt: Prompt::new(h, def, &args) }
     }
 }
 

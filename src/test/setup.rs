@@ -9,7 +9,7 @@ use super::*;
 fn config_ok_0() {
     let pdl = b"primitive main() {}";
     let d = ProtocolD::parse(pdl).unwrap();
-    let pol = d.main_interface_polarities();
+    let pol = d.component_polarities(b"main").unwrap();
     assert_eq!(&pol[..], &[]);
 }
 
@@ -17,8 +17,8 @@ fn config_ok_0() {
 fn config_ok_2() {
     let pdl = b"primitive main(in x, out y) {}";
     let d = ProtocolD::parse(pdl).unwrap();
-    let pol = d.main_interface_polarities();
-    assert_eq!(&pol[..], &[Polarity::Getter, Polarity::Putter]);
+    let pol = d.component_polarities(b"main").unwrap();
+    assert_eq!(&pol[..], &[Getter, Putter]);
 }
 
 #[test]
@@ -37,14 +37,14 @@ fn config_and_connect_2() {
         //
         thread::spawn(move || {
             let mut x = Connector::Unconfigured(Unconfigured { controller_id: 0 });
-            x.configure(b"primitive main(in a, out b) {}").unwrap();
+            x.configure(b"primitive main(in a, out b) {}", b"main").unwrap();
             x.bind_port(0, Passive(addrs[0])).unwrap();
             x.bind_port(1, Passive(addrs[1])).unwrap();
             x.connect(timeout).unwrap();
         }),
         thread::spawn(move || {
             let mut x = Connector::Unconfigured(Unconfigured { controller_id: 1 });
-            x.configure(b"primitive main(out a, in b) {}").unwrap();
+            x.configure(b"primitive main(out a, in b) {}", b"main").unwrap();
             x.bind_port(0, Active(addrs[0])).unwrap();
             x.bind_port(1, Active(addrs[1])).unwrap();
             x.connect(timeout).unwrap();
@@ -58,7 +58,7 @@ fn config_and_connect_2() {
 #[test]
 fn bind_too_much() {
     let mut x = Connector::Unconfigured(Unconfigured { controller_id: 0 });
-    x.configure(b"primitive main(in a) {}").unwrap();
+    x.configure(b"primitive main(in a) {}", b"main").unwrap();
     x.bind_port(0, Native).unwrap();
     assert!(x.bind_port(1, Native).is_err());
 }
@@ -77,14 +77,14 @@ fn config_and_connect_chain() {
         thread::spawn(move || {
             // PRODUCER A->
             let mut x = Connector::Unconfigured(Unconfigured { controller_id: 0 });
-            x.configure(b"primitive main(out a) {}").unwrap();
+            x.configure(b"primitive main(out a) {}", b"main").unwrap();
             x.bind_port(0, Active(addrs[0])).unwrap();
             x.connect(timeout).unwrap();
         }),
         thread::spawn(move || {
             // FORWARDER ->B->
             let mut x = Connector::Unconfigured(Unconfigured { controller_id: 1 });
-            x.configure(b"primitive main(in a, out b) {}").unwrap();
+            x.configure(b"primitive main(in a, out b) {}", b"main").unwrap();
             x.bind_port(0, Passive(addrs[0])).unwrap();
             x.bind_port(1, Active(addrs[1])).unwrap();
             x.connect(timeout).unwrap();
@@ -92,7 +92,7 @@ fn config_and_connect_chain() {
         thread::spawn(move || {
             // FORWARDER ->C->
             let mut x = Connector::Unconfigured(Unconfigured { controller_id: 2 });
-            x.configure(b"primitive main(in a, out b) {}").unwrap();
+            x.configure(b"primitive main(in a, out b) {}", b"main").unwrap();
             x.bind_port(0, Passive(addrs[1])).unwrap();
             x.bind_port(1, Active(addrs[2])).unwrap();
             x.connect(timeout).unwrap();
@@ -100,7 +100,7 @@ fn config_and_connect_chain() {
         thread::spawn(move || {
             // CONSUMER ->D
             let mut x = Connector::Unconfigured(Unconfigured { controller_id: 3 });
-            x.configure(b"primitive main(in a) {}").unwrap();
+            x.configure(b"primitive main(in a) {}", b"main").unwrap();
             x.bind_port(0, Passive(addrs[2])).unwrap();
             x.connect(timeout).unwrap();
         }),

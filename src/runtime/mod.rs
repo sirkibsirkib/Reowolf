@@ -54,6 +54,7 @@ pub struct Configured {
     polarities: Vec<Polarity>,
     bindings: HashMap<usize, PortBinding>,
     protocol_description: Arc<ProtocolD>,
+    main_component: Vec<u8>,
 }
 #[derive(Debug)]
 pub struct Connected {

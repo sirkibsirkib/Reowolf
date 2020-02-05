@@ -35,6 +35,7 @@ impl Connector {
             protocol_description,
             bindings: Default::default(),
             polarities,
+            main_component: main_component.to_vec(),
         };
         *self = Connector::Configured(configured);
         Ok(())
@@ -69,16 +70,22 @@ impl Connector {
         };
         // 1. Unwrap bindings or err
         let bound_proto_interface: Vec<(_, _)> = configured
-            .proto_maybe_bindings
+            .polarities
             .iter()
             .copied()
             .enumerate()
-            .map(|(native_index, (polarity, maybe_binding))| {
-                Ok((maybe_binding.ok_or(PortNotBound { native_index })?, polarity))
+            .map(|(native_index, polarity)| {
+                let binding = configured
+                    .bindings
+                    .get(&native_index)
+                    .copied()
+                    .ok_or(PortNotBound { native_index })?;
+                Ok((binding, polarity))
             })
             .collect::<Result<Vec<(_, _)>, ConnectErr>>()?;
         let (controller, native_interface) = Controller::connect(
             configured.controller_id,
+            &configured.main_component,
             configured.protocol_description.clone(),
             &bound_proto_interface[..],
             deadline,

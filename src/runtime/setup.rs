@@ -20,6 +20,7 @@ impl Controller {
     // Given port bindings and a protocol config, create a connector with 1 native node
     pub fn connect(
         major: ControllerId,
+        main_component: &[u8],
         protocol_description: Arc<ProtocolD>,
         bound_proto_interface: &[(PortBinding, Polarity)],
         deadline: Instant,
@@ -101,7 +102,7 @@ impl Controller {
 
         let n_mono = Some(MonoN { ekeys: ekeys_native.into_iter().collect(), result: None });
         let p_monos = vec![MonoP {
-            state: protocol_description.new_main_component(&ekeys_proto),
+            state: protocol_description.new_main_component(main_component, &ekeys_proto),
             ekeys: ekeys_proto.into_iter().collect(),
         }];
 
