@@ -764,13 +764,8 @@ impl Heap {
     pub fn alloc_import(&mut self, f: impl FnOnce(ImportId) -> Import) -> ImportId {
         ImportId(self.imports.alloc_with_id(|id| f(ImportId(id))))
     }
-    pub fn alloc_protocol_description(
-        &mut self,
-        f: impl FnOnce(RootId) -> Root,
-    ) -> RootId {
-        RootId(
-            self.protocol_descriptions.alloc_with_id(|id| f(RootId(id))),
-        )
+    pub fn alloc_protocol_description(&mut self, f: impl FnOnce(RootId) -> Root) -> RootId {
+        RootId(self.protocol_descriptions.alloc_with_id(|id| f(RootId(id))))
     }
     pub fn alloc_imported_declaration(
         &mut self,
@@ -1636,7 +1631,7 @@ impl Definition {
         match self {
             Definition::Component(_) => true,
             _ => false,
-         }
+        }
     }
     pub fn as_component(&self) -> &Component {
         match self {

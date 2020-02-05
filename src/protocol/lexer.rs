@@ -1618,10 +1618,7 @@ impl Lexer<'_> {
         self.consume_string(b";")?;
         Ok(h.alloc_import(|this| Import { this, position, value }))
     }
-    pub fn consume_protocol_description(
-        &mut self,
-        h: &mut Heap,
-    ) -> Result<RootId, ParseError> {
+    pub fn consume_protocol_description(&mut self, h: &mut Heap) -> Result<RootId, ParseError> {
         let position = self.source.pos();
         let mut pragmas = Vec::new();
         let mut imports = Vec::new();

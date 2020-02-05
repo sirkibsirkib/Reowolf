@@ -1,3 +1,6 @@
+use crate::common::ControllerId;
+use crate::runtime::Connector;
+use crate::runtime::Unconfigured;
 use core::fmt::Debug;
 
 mod connector;
@@ -15,11 +18,51 @@ impl Debug for Panicked {
         }
     }
 }
-fn handle(result: Result<(), std::boxed::Box<(dyn std::any::Any + std::marker::Send + 'static)>>) {
-    match result {
-        Ok(_) => {}
-        Err(x) => {
-            panic!("Worker panicked: {:?}", Panicked(x));
+fn handle(result: Result<(), Box<(dyn std::any::Any + Send + 'static)>>) {
+    if let Err(x) = result {
+        panic!("Worker panicked: {:?}", Panicked(x))
+    }
+}
+
+fn do_all(i: &[&(dyn Fn(&mut Connector) + Sync)]) {
+    let cid_iter = 0..(i.len() as ControllerId);
+    let mut connectors = cid_iter
+        .clone()
+        .map(|controller_id| Connector::Unconfigured(Unconfigured { controller_id }))
+        .collect::<Vec<_>>();
+
+    let mut results = vec![];
+    crossbeam_utils::thread::scope(|s| {
+        let handles: Vec<_> = i
+            .iter()
+            .zip(connectors.iter_mut())
+            .map(|(func, connector)| s.spawn(move |_| func(connector)))
+            .collect();
+        for h in handles {
+            results.push(h.join());
         }
+    })
+    .unwrap();
+
+    let mut failures = false;
+
+    for ((controller_id, connector), res) in
+        cid_iter.zip(connectors.iter_mut()).zip(results.into_iter())
+    {
+        println!("====================\n CID {:?} ...", controller_id);
+        match connector.get_mut_logger() {
+            Some(logger) => println!("{}", logger),
+            None => println!("<No Log>"),
+        }
+        match res {
+            Ok(()) => println!("CID {:?} OK!", controller_id),
+            Err(e) => {
+                failures = true;
+                println!("CI {:?} PANIC! {:?}", controller_id, Panicked(e));
+            }
+        };
+    }
+    if failures {
+        panic!("FAILURES!");
     }
 }

@@ -61,7 +61,7 @@ impl std::fmt::Debug for Endpoint {
             Endpoint::Memory { .. } => "Memory",
             Endpoint::Network(..) => "Network",
         };
-        write!(f, "Endpoint::{}", s)
+        f.write_fmt(format_args!("Endpoint::{}", s))
     }
 }
 

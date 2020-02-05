@@ -444,16 +444,16 @@ impl Predicate {
 }
 impl Debug for Predicate {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.pad("{")?;
         for (ChannelId { controller_id, channel_index }, &v) in self.assigned.iter() {
-            write!(
-                f,
+            f.write_fmt(format_args!(
                 "({:?},{:?})=>{}, ",
                 controller_id,
                 channel_index,
                 if v { 'T' } else { 'F' }
-            )?;
+            ))?
         }
-        Ok(())
+        f.pad("}")
     }
 }
 

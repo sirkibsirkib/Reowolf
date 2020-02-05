@@ -54,7 +54,7 @@ impl Value {
     fn create_message(length: Value) -> Value {
         match length {
             Value::Byte(_) | Value::Short(_) | Value::Int(_) | Value::Long(_) => {
-                let length : i64 = i64::from(length);
+                let length: i64 = i64::from(length);
                 if length < 0 || length > MESSAGE_MAX_LENGTH {
                     // Only messages within the expected length are allowed
                     Value::Message(MessageValue(None))
@@ -62,7 +62,7 @@ impl Value {
                     Value::Message(MessageValue(Some(vec![0; length.try_into().unwrap()])))
                 }
             }
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
     }
     fn from_constant(constant: &Constant) -> Value {
@@ -89,7 +89,7 @@ impl Value {
     }
     fn set(&mut self, index: &Value, value: &Value) -> Option<Value> {
         // The index must be of integer type, and non-negative
-        let the_index : usize;
+        let the_index: usize;
         match index {
             Value::Byte(_) | Value::Short(_) | Value::Int(_) | Value::Long(_) => {
                 let index = i64::from(index);
@@ -99,7 +99,7 @@ impl Value {
                 }
                 the_index = index.try_into().unwrap();
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         }
         // The subject must be either a message or an array
         // And the value and the subject must be compatible
@@ -142,7 +142,7 @@ impl Value {
             (Value::ShortArray(_), Value::Short(_)) => todo!(),
             (Value::IntArray(_), Value::Int(_)) => todo!(),
             (Value::LongArray(_), Value::Long(_)) => todo!(),
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
     fn plus(&self, other: &Value) -> Value {
@@ -891,7 +891,7 @@ impl Display for MessageValue {
                     }
                 }
                 write!(f, ")")
-            },
+            }
         }
     }
 }
@@ -1334,7 +1334,13 @@ impl Store {
         // Overwrite mapping
         self.map.insert(var, value.clone());
     }
-    fn update(&mut self, h: &Heap, ctx: &mut EvalContext, lexpr: ExpressionId, value: Value) -> EvalResult {
+    fn update(
+        &mut self,
+        h: &Heap,
+        ctx: &mut EvalContext,
+        lexpr: ExpressionId,
+        value: Value,
+    ) -> EvalResult {
         match &h[lexpr] {
             Expression::Variable(var) => {
                 let var = var.declaration.unwrap();
@@ -1359,7 +1365,7 @@ impl Store {
                 }
                 match subject.set(&index, &value) {
                     Some(value) => Ok(value),
-                    None => Err(EvalContinuation::Inconsistent)
+                    None => Err(EvalContinuation::Inconsistent),
                 }
             }
             _ => unimplemented!("{:?}", h[lexpr]),
@@ -1405,7 +1411,7 @@ impl Store {
             }
             Expression::Binary(expr) => {
                 let left = self.eval(h, ctx, expr.left)?;
-                let right = self.eval(h, ctx,expr.right)?;
+                let right = self.eval(h, ctx, expr.right)?;
                 match expr.operation {
                     BinaryOperator::Equality => Ok(left.eq(&right)),
                     BinaryOperator::Inequality => Ok(left.neq(&right)),
@@ -1443,32 +1449,30 @@ impl Store {
             Expression::Select(expr) => self.get(h, expr.this.upcast()),
             Expression::Array(expr) => unimplemented!(),
             Expression::Constant(expr) => Ok(Value::from_constant(&expr.value)),
-            Expression::Call(expr) => {
-                match expr.method {
-                    Method::Create => {
-                        assert_eq!(1, expr.arguments.len());
-                        let length = self.eval(h, ctx, expr.arguments[0])?;
-                        Ok(Value::create_message(length))
-                    }
-                    Method::Fires => {
-                        assert_eq!(1, expr.arguments.len());
-                        let value = self.eval(h, ctx, expr.arguments[0])?;
-                        match ctx.fires(value.clone()) {
-                            None => Err(EvalContinuation::BlockFires(value)),
-                            Some(result) => Ok(result),
-                        }
-                    }
-                    Method::Get => {
-                        assert_eq!(1, expr.arguments.len());
-                        let value = self.eval(h, ctx, expr.arguments[0])?;
-                        match ctx.get(value.clone()) {
-                            None => Err(EvalContinuation::BlockGet(value)),
-                            Some(result) => Ok(result)
-                        }
-                    }
-                    Method::Symbolic(symbol) => unimplemented!()
+            Expression::Call(expr) => match expr.method {
+                Method::Create => {
+                    assert_eq!(1, expr.arguments.len());
+                    let length = self.eval(h, ctx, expr.arguments[0])?;
+                    Ok(Value::create_message(length))
                 }
-            }
+                Method::Fires => {
+                    assert_eq!(1, expr.arguments.len());
+                    let value = self.eval(h, ctx, expr.arguments[0])?;
+                    match ctx.fires(value.clone()) {
+                        None => Err(EvalContinuation::BlockFires(value)),
+                        Some(result) => Ok(result),
+                    }
+                }
+                Method::Get => {
+                    assert_eq!(1, expr.arguments.len());
+                    let value = self.eval(h, ctx, expr.arguments[0])?;
+                    match ctx.get(value.clone()) {
+                        None => Err(EvalContinuation::BlockGet(value)),
+                        Some(result) => Ok(result),
+                    }
+                }
+                Method::Symbolic(symbol) => unimplemented!(),
+            },
             Expression::Variable(expr) => self.get(h, expr.this.upcast()),
         }
     }
@@ -1496,11 +1500,8 @@ pub struct Prompt {
 
 impl Prompt {
     pub fn new(h: &Heap, def: DefinitionId, args: &Vec<Value>) -> Self {
-        let mut prompt = Prompt {
-            definition: def,
-            store: Store::new(),
-            position: Some((&h[def]).body())
-        };
+        let mut prompt =
+            Prompt { definition: def, store: Store::new(), position: Some((&h[def]).body()) };
         prompt.set_arguments(h, args);
         prompt
     }
@@ -1642,8 +1643,8 @@ impl Prompt {
                     EvalContinuation::NewComponent(args) => unreachable!(),
                     EvalContinuation::BlockFires(val) => unreachable!(),
                     EvalContinuation::BlockGet(val) => unreachable!(),
-                    EvalContinuation::Put(port, msg) => unreachable!()
-                }
+                    EvalContinuation::Put(port, msg) => unreachable!(),
+                },
             }
         }
     }

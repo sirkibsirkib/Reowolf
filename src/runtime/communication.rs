@@ -98,21 +98,32 @@ impl Controller {
                     predicate requires the support of oracle boolean variables"
                 )
             }
-            let branch = BranchN {
-                to_get: true_ekeys.collect(),
-                gotten: Default::default(),
-                sync_batch_index,
-            };
+            let branch = BranchN { to_get: gets, gotten: Default::default(), sync_batch_index };
             for (ekey, payload) in puts {
+                log!(
+                    &mut self.inner.logger,
+                    "... ... Initial native put msg {:?} pred {:?} batch {:?}",
+                    &payload,
+                    &predicate,
+                    sync_batch_index,
+                );
                 let msg =
                     CommMsgContents::SendPayload { payload_predicate: predicate.clone(), payload }
                         .into_msg(*round_index);
                 endpoint_exts.get_mut(ekey).unwrap().endpoint.send(msg)?;
             }
+            log!(
+                &mut self.inner.logger,
+                "... Initial native branch (batch index={} with pred {:?}",
+                sync_batch_index,
+                &predicate
+            );
             if branch.to_get.is_empty() {
-                self.ephemeral
-                    .solution_storage
-                    .submit_and_digest_subtree_solution(SubtreeId::PolyN, predicate.clone());
+                self.ephemeral.solution_storage.submit_and_digest_subtree_solution(
+                    &mut self.inner.logger,
+                    SubtreeId::PolyN,
+                    predicate.clone(),
+                );
             }
             branches.insert(predicate, branch);
         }
@@ -315,9 +326,11 @@ impl Controller {
                         subtree_id,
                         &partial_oracle
                     );
-                    self.ephemeral
-                        .solution_storage
-                        .submit_and_digest_subtree_solution(subtree_id, partial_oracle);
+                    self.ephemeral.solution_storage.submit_and_digest_subtree_solution(
+                        &mut self.inner.logger,
+                        subtree_id,
+                        partial_oracle,
+                    );
 
                     if self.handle_locals_maybe_decide()? {
                         return Ok(());
@@ -351,15 +364,19 @@ impl Controller {
                             // this happens when a message is sent to a component that has exited.
                             // It's safe to drop this message;
                             // The sender branch will certainly not be part of the solution
-                            continue 'recv_loop;
                         }
                         Some(PolyId::N) => {
                             // Message for NativeMachine
                             self.ephemeral.poly_n.as_mut().unwrap().sync_recv(
                                 received.recipient,
+                                &mut self.inner.logger,
                                 payload,
+                                payload_predicate,
                                 &mut self.ephemeral.solution_storage,
                             );
+                            if self.handle_locals_maybe_decide()? {
+                                return Ok(());
+                            }
                         }
                         Some(PolyId::P { index }) => {
                             // Message for protocol actor
@@ -546,9 +563,11 @@ impl SolutionStorage {
 
     pub(crate) fn submit_and_digest_subtree_solution(
         &mut self,
+        logger: &mut String,
         subtree_id: SubtreeId,
         predicate: Predicate,
     ) {
+        log!(logger, "NEW COMPONENT SOLUTION {:?} {:?}", subtree_id, &predicate);
         let index = self.subtree_id_to_index[&subtree_id];
         let left = 0..index;
         let right = (index + 1)..self.subtree_solutions.len();
@@ -557,11 +576,18 @@ impl SolutionStorage {
         let was_new = subtree_solutions[index].insert(predicate.clone());
         if was_new {
             let set_visitor = left.chain(right).map(|index| &subtree_solutions[index]);
-            Self::elaborate_into_new_local_rec(predicate, set_visitor, old_local, new_local);
+            Self::elaborate_into_new_local_rec(
+                logger,
+                predicate,
+                set_visitor,
+                old_local,
+                new_local,
+            );
         }
     }
 
     fn elaborate_into_new_local_rec<'a, 'b>(
+        logger: &mut String,
         partial: Predicate,
         mut set_visitor: impl Iterator<Item = &'b HashSet<Predicate>> + Clone,
         old_local: &'b HashSet<Predicate>,
@@ -572,6 +598,7 @@ impl SolutionStorage {
             for pred in set.iter() {
                 if let Some(elaborated) = pred.union_with(&partial) {
                     Self::elaborate_into_new_local_rec(
+                        logger,
                         elaborated,
                         set_visitor.clone(),
                         old_local,
@@ -583,6 +610,7 @@ impl SolutionStorage {
             // recursive stop condition. `partial` is a local subtree solution
             if !old_local.contains(&partial) {
                 // ... and it hasn't been found before
+                log!(logger, "... storing NEW LOCAL SOLUTION {:?}", &partial);
                 new_local.insert(partial);
             }
         }

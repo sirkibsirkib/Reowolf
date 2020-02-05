@@ -7,9 +7,9 @@ mod parser;
 
 use crate::common::*;
 use crate::protocol::ast::*;
+use crate::protocol::eval::*;
 use crate::protocol::inputsource::*;
 use crate::protocol::parser::*;
-use crate::protocol::eval::*;
 use std::hint::unreachable_unchecked;
 
 pub struct ProtocolDescriptionImpl {
@@ -69,24 +69,24 @@ impl ProtocolDescription for ProtocolDescriptionImpl {
         for (&x, y) in interface.iter().zip(self.main_interface_polarities()) {
             match y {
                 Polarity::Getter => args.push(Value::Input(InputValue(x))),
-                Polarity::Putter => args.push(Value::Output(OutputValue(x)))
+                Polarity::Putter => args.push(Value::Output(OutputValue(x))),
             }
         }
-        ComponentStateImpl {
-            prompt: Prompt::new(&self.heap, self.main.upcast(), &args)
-        }
+        ComponentStateImpl { prompt: Prompt::new(&self.heap, self.main.upcast(), &args) }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct ComponentStateImpl {
-    prompt: Prompt
+    prompt: Prompt,
 }
 impl ComponentState for ComponentStateImpl {
     type D = ProtocolDescriptionImpl;
 
     fn pre_sync_run<C: MonoContext<D = ProtocolDescriptionImpl, S = Self>>(
-        &mut self, context: &mut C, pd: &ProtocolDescriptionImpl,
+        &mut self,
+        context: &mut C,
+        pd: &ProtocolDescriptionImpl,
     ) -> MonoBlocker {
         let mut context = EvalContext::Mono(context);
         loop {
@@ -103,19 +103,21 @@ impl ComponentState for ComponentStateImpl {
                     EvalContinuation::SyncBlockEnd => unreachable!(),
                     EvalContinuation::NewComponent(args) => {
                         todo!();
-                        continue
+                        continue;
                     }
                     // Outside synchronous blocks, no fires/get/put happens
                     EvalContinuation::BlockFires(val) => unreachable!(),
                     EvalContinuation::BlockGet(val) => unreachable!(),
-                    EvalContinuation::Put(port, msg) => unreachable!()
-                }
+                    EvalContinuation::Put(port, msg) => unreachable!(),
+                },
             }
         }
     }
 
     fn sync_run<C: PolyContext<D = ProtocolDescriptionImpl>>(
-        &mut self, context: &mut C,  pd: &ProtocolDescriptionImpl,
+        &mut self,
+        context: &mut C,
+        pd: &ProtocolDescriptionImpl,
     ) -> PolyBlocker {
         let mut context = EvalContext::Poly(context);
         loop {
@@ -133,28 +135,24 @@ impl ComponentState for ComponentStateImpl {
                     EvalContinuation::SyncBlockEnd => return PolyBlocker::SyncBlockEnd,
                     // Not possible to create component in sync block
                     EvalContinuation::NewComponent(args) => unreachable!(),
-                    EvalContinuation::BlockFires(port) => {
-                        match port {
-                            Value::Output(OutputValue(key)) => {
-                                return PolyBlocker::CouldntCheckFiring(key);
-                            }
-                            Value::Input(InputValue(key)) => {
-                                return PolyBlocker::CouldntCheckFiring(key);
-                            }
-                            _ => unreachable!()
+                    EvalContinuation::BlockFires(port) => match port {
+                        Value::Output(OutputValue(key)) => {
+                            return PolyBlocker::CouldntCheckFiring(key);
                         }
-                    }
-                    EvalContinuation::BlockGet(port) => {
-                        match port {
-                            Value::Output(OutputValue(key)) => {
-                                return PolyBlocker::CouldntReadMsg(key);
-                            }
-                            Value::Input(InputValue(key)) => {
-                                return PolyBlocker::CouldntReadMsg(key);
-                            }
-                            _ => unreachable!()
+                        Value::Input(InputValue(key)) => {
+                            return PolyBlocker::CouldntCheckFiring(key);
                         }
-                    }
+                        _ => unreachable!(),
+                    },
+                    EvalContinuation::BlockGet(port) => match port {
+                        Value::Output(OutputValue(key)) => {
+                            return PolyBlocker::CouldntReadMsg(key);
+                        }
+                        Value::Input(InputValue(key)) => {
+                            return PolyBlocker::CouldntReadMsg(key);
+                        }
+                        _ => unreachable!(),
+                    },
                     EvalContinuation::Put(port, message) => {
                         let key;
                         match port {
@@ -164,7 +162,7 @@ impl ComponentState for ComponentStateImpl {
                             Value::Input(InputValue(the_key)) => {
                                 key = the_key;
                             }
-                            _ => unreachable!()
+                            _ => unreachable!(),
                         }
                         let payload;
                         match message {
@@ -176,11 +174,11 @@ impl ComponentState for ComponentStateImpl {
                                 // Create a copy of the payload
                                 payload = buffer.clone();
                             }
-                            _ => unreachable!()
+                            _ => unreachable!(),
                         }
                         return PolyBlocker::PutMsg(key, payload);
                     }
-                }
+                },
             }
         }
     }
@@ -189,7 +187,7 @@ impl ComponentState for ComponentStateImpl {
 pub enum EvalContext<'a> {
     Mono(&'a mut dyn MonoContext<D = ProtocolDescriptionImpl, S = ComponentStateImpl>),
     Poly(&'a mut dyn PolyContext<D = ProtocolDescriptionImpl>),
-    None
+    None,
 }
 impl EvalContext<'_> {
     fn random(&mut self) -> LongValue {
@@ -210,33 +208,23 @@ impl EvalContext<'_> {
         match self {
             EvalContext::None => unreachable!(),
             EvalContext::Mono(context) => unreachable!(),
-            EvalContext::Poly(context) => {
-                match port {
-                    Value::Output(OutputValue(key)) => {
-                        context.is_firing(key).map(Value::from)
-                    }
-                    Value::Input(InputValue(key)) => {
-                        context.is_firing(key).map(Value::from)
-                    }
-                    _ => unreachable!()
-                }
-            }
+            EvalContext::Poly(context) => match port {
+                Value::Output(OutputValue(key)) => context.is_firing(key).map(Value::from),
+                Value::Input(InputValue(key)) => context.is_firing(key).map(Value::from),
+                _ => unreachable!(),
+            },
         }
     }
     fn get(&mut self, port: Value) -> Option<Value> {
         match self {
             EvalContext::None => unreachable!(),
             EvalContext::Mono(context) => unreachable!(),
-            EvalContext::Poly(context) => {
-                match port {
-                    Value::Output(OutputValue(key)) => {
-                        context.read_msg(key).map(Value::receive_message)
-                    }
-                    Value::Input(InputValue(key)) => {
-                        context.read_msg(key).map(Value::receive_message)
-                    }
-                    _ => unreachable!()
+            EvalContext::Poly(context) => match port {
+                Value::Output(OutputValue(key)) => {
+                    context.read_msg(key).map(Value::receive_message)
                 }
+                Value::Input(InputValue(key)) => context.read_msg(key).map(Value::receive_message),
+                _ => unreachable!(),
             },
         }
     }

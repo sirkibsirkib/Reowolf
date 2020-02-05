@@ -27,6 +27,7 @@ backtrace = "0.3"
 
 [dev-dependencies]
 test-generator = "0.3.0"
+crossbeam-utils = "0.7.0"
 
 [lib]
 crate-type = ["cdylib"]
