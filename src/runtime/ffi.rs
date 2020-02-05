@@ -129,7 +129,7 @@ pub unsafe extern "C" fn connector_configure(connector: *mut Connector, pdl: *mu
 /// # Safety
 /// TODO
 #[no_mangle]
-pub unsafe extern "C" fn port_bind_native(
+pub unsafe extern "C" fn connector_bind_native(
     connector: *mut Connector,
     proto_port_index: usize,
 ) -> c_int {
@@ -152,7 +152,7 @@ pub unsafe extern "C" fn port_bind_native(
 /// # Safety
 /// TODO
 #[no_mangle]
-pub unsafe extern "C" fn port_bind_passive(
+pub unsafe extern "C" fn connector_bind_passive(
     connector: *mut Connector,
     proto_port_index: c_uint,
     address: *const c_char,
@@ -184,7 +184,7 @@ pub unsafe extern "C" fn port_bind_passive(
 /// # Safety
 /// TODO
 #[no_mangle]
-pub unsafe extern "C" fn port_bind_active(
+pub unsafe extern "C" fn connector_bind_active(
     connector: *mut Connector,
     proto_port_index: c_uint,
     address: *const c_char,
