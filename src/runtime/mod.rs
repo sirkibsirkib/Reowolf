@@ -49,17 +49,16 @@ pub struct Unconfigured {
     pub controller_id: ControllerId,
 }
 #[derive(Debug)]
+pub struct Configured {
+    controller_id: ControllerId,
+    bindings: HashMap<usize, PortBinding>,
+    protocol_description: Arc<ProtocolD>,
+}
+#[derive(Debug)]
 pub struct Connected {
     native_interface: Vec<(Key, Polarity)>,
     sync_batches: Vec<SyncBatch>,
     controller: Controller,
-}
-#[derive(Debug)]
-pub struct Configured {
-    // invariant: proto_maybe_bindings.len() is the size of the protocol's interface
-    controller_id: ControllerId,
-    proto_maybe_bindings: Vec<(Polarity, Option<PortBinding>)>,
-    protocol_description: Arc<ProtocolD>,
 }
 
 #[derive(Debug, Copy, Clone)]

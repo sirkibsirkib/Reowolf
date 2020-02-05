@@ -29,12 +29,8 @@ impl Connector {
             Connector::Unconfigured(Unconfigured { controller_id }) => *controller_id,
         };
         let protocol_description = Arc::new(ProtocolD::parse(pdl).map_err(ParseErr)?);
-        let proto_maybe_bindings = protocol_description
-            .main_interface_polarities()
-            .into_iter()
-            .zip(std::iter::repeat(None))
-            .collect();
-        let configured = Configured { controller_id, protocol_description, proto_maybe_bindings };
+        let configured =
+            Configured { controller_id, protocol_description, bindings: Default::default() };
         *self = Connector::Configured(configured);
         Ok(())
     }
@@ -50,14 +46,8 @@ impl Connector {
             Connector::Unconfigured { .. } => Err(NotConfigured),
             Connector::Connected(_) => Err(AlreadyConnected),
             Connector::Configured(configured) => {
-                match configured.proto_maybe_bindings.get_mut(proto_port_index) {
-                    None => Err(IndexOutOfBounds),
-                    Some((_polarity, Some(_))) => Err(PortAlreadyBound),
-                    Some((_polarity, x @ None)) => {
-                        *x = Some(binding);
-                        Ok(())
-                    }
-                }
+                configured.bindings.insert(proto_port_index, binding);
+                Ok(())
             }
         }
     }
@@ -70,7 +60,14 @@ impl Connector {
             Connector::Configured(configured) => configured,
         };
         // 1. Unwrap bindings or err
-        let bound_proto_interface: Vec<(_, _)> = configured
+        let mut bindings_vec = Vec::with_capacity(configured.bindings.len());
+        for native_index in 0..configured.bindings.len() {
+            let binding =
+                configured.bindings.get(&native_index).ok_or(PortNotBound { native_index })?;
+            bindings_vec.push(*binding);
+        }
+        let bound_proto_interface: Vec<(_, _)> = (0..num_bindings)
+            .map(|i| configured.bindings.get())
             .proto_maybe_bindings
             .iter()
             .copied()
