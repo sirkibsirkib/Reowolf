@@ -53,11 +53,7 @@ pub trait ProtocolDescription: Sized {
 
     fn parse(pdl: &[u8]) -> Result<Self, String>;
     fn component_polarities(&self, identifier: &[u8]) -> Result<Vec<Polarity>, MainComponentErr>;
-    fn new_main_component(
-        &self,
-        identifier: &[u8],
-        ports: &[Key],
-    ) -> Result<Self::S, MainComponentErr>;
+    fn new_main_component(&self, identifier: &[u8], ports: &[Key]) -> Self::S;
 }
 
 pub trait ComponentState: Sized + Clone {
