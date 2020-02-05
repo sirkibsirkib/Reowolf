@@ -28,6 +28,8 @@ pub enum ConfigErr {
     AlreadyConnected,
     ParseErr(String),
     AlreadyConfigured,
+    NoSuchComponent,
+    NonPortTypeParameters,
 }
 #[derive(Debug, Clone)]
 pub enum ConnectErr {
@@ -78,4 +80,14 @@ pub enum EvalErr {
 pub enum MessengerRecvErr {
     PollingFailed,
     EndpointErr(EndpointErr),
+}
+impl From<MainComponentErr> for ConfigErr {
+    fn from(e: MainComponentErr) -> Self {
+        use ConfigErr as C;
+        use MainComponentErr as M;
+        match e {
+            M::NoSuchComponent => C::NoSuchComponent,
+            M::NonPortTypeParameters => C::NonPortTypeParameters,
+        }
+    }
 }

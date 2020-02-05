@@ -110,14 +110,20 @@ pub extern "C" fn connector_with_controller_id(controller_id: ControllerId) -> *
 /// # Safety
 /// TODO
 #[no_mangle]
-pub unsafe extern "C" fn connector_configure(connector: *mut Connector, pdl: *mut c_char) -> c_int {
+pub unsafe extern "C" fn connector_configure(
+    connector: *mut Connector,
+    pdl: *mut c_char,
+    main: *mut c_char,
+) -> c_int {
     let mut b = Box::from_raw(connector); // unsafe!
-    let ret = as_rust_bytes(pdl, |pdl_bytes| match b.configure(pdl_bytes) {
-        Ok(()) => 0,
-        Err(e) => {
-            overwrite_last_error(format!("{:?}", e).as_bytes());
-            -1
-        }
+    let ret = as_rust_bytes(pdl, |pdl_bytes| {
+        as_rust_bytes(main, |main_bytes| match b.configure(pdl_bytes, main_bytes) {
+            Ok(()) => 0,
+            Err(e) => {
+                overwrite_last_error(format!("{:?}", e).as_bytes());
+                -1
+            }
+        })
     });
     Box::into_raw(b); // don't drop!
     ret

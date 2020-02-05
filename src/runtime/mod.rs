@@ -51,6 +51,7 @@ pub struct Unconfigured {
 #[derive(Debug)]
 pub struct Configured {
     controller_id: ControllerId,
+    polarities: Vec<Polarity>,
     bindings: HashMap<usize, PortBinding>,
     protocol_description: Arc<ProtocolD>,
 }

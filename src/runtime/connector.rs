@@ -21,7 +21,7 @@ impl Default for Connector {
 }
 impl Connector {
     /// Configure the Connector with the given Pdl description.
-    pub fn configure(&mut self, pdl: &[u8]) -> Result<(), ConfigErr> {
+    pub fn configure(&mut self, pdl: &[u8], main_component: &[u8]) -> Result<(), ConfigErr> {
         use ConfigErr::*;
         let controller_id = match self {
             Connector::Configured(_) => return Err(AlreadyConfigured),
@@ -29,8 +29,13 @@ impl Connector {
             Connector::Unconfigured(Unconfigured { controller_id }) => *controller_id,
         };
         let protocol_description = Arc::new(ProtocolD::parse(pdl).map_err(ParseErr)?);
-        let configured =
-            Configured { controller_id, protocol_description, bindings: Default::default() };
+        let polarities = protocol_description.component_polarities(main_component)?;
+        let configured = Configured {
+            controller_id,
+            protocol_description,
+            bindings: Default::default(),
+            polarities,
+        };
         *self = Connector::Configured(configured);
         Ok(())
     }
@@ -46,6 +51,9 @@ impl Connector {
             Connector::Unconfigured { .. } => Err(NotConfigured),
             Connector::Connected(_) => Err(AlreadyConnected),
             Connector::Configured(configured) => {
+                if configured.polarities.len() <= proto_port_index {
+                    return Err(IndexOutOfBounds);
+                }
                 configured.bindings.insert(proto_port_index, binding);
                 Ok(())
             }
@@ -60,14 +68,7 @@ impl Connector {
             Connector::Configured(configured) => configured,
         };
         // 1. Unwrap bindings or err
-        let mut bindings_vec = Vec::with_capacity(configured.bindings.len());
-        for native_index in 0..configured.bindings.len() {
-            let binding =
-                configured.bindings.get(&native_index).ok_or(PortNotBound { native_index })?;
-            bindings_vec.push(*binding);
-        }
-        let bound_proto_interface: Vec<(_, _)> = (0..num_bindings)
-            .map(|i| configured.bindings.get())
+        let bound_proto_interface: Vec<(_, _)> = configured
             .proto_maybe_bindings
             .iter()
             .copied()

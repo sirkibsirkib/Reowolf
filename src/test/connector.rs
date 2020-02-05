@@ -23,6 +23,7 @@ fn next_addr() -> SocketAddr {
 fn incremental() {
     let timeout = Duration::from_millis(1_500);
     let addrs = [next_addr(), next_addr()];
+    static PDL: &[u8] = b"";
     let handles = vec![
         thread::spawn(move || {
             let controller_id = 0;
@@ -34,6 +35,7 @@ fn incremental() {
                         put(a, m);
                     }
                 }",
+                b"main",
             )
             .unwrap();
             x.bind_port(0, Passive(addrs[0])).unwrap();
@@ -51,6 +53,7 @@ fn incremental() {
                         get(a);
                     }
                 }",
+                b"main",
             )
             .unwrap();
             x.bind_port(0, Active(addrs[0])).unwrap();
@@ -85,6 +88,7 @@ fn duo_positive() {
                     put(b, m);
                 }
             }",
+            b"main",
         )
         .unwrap();
         x.bind_port(0, Passive(addrs[0])).unwrap();
@@ -114,6 +118,7 @@ fn duo_positive() {
                     }
                 }
             }",
+            b"main",
         )
         .unwrap();
         x.bind_port(0, Active(addrs[0])).unwrap();
@@ -144,6 +149,7 @@ fn duo_negative() {
                     put(a, m); // fires a on second round
                 }
             }",
+            b"main",
         )
         .unwrap();
         x.bind_port(0, Passive(addrs[0])).unwrap();
@@ -175,6 +181,7 @@ fn duo_negative() {
                     }
                 }
             }",
+            b"main",
         )
         .unwrap();
         x.bind_port(0, Active(addrs[0])).unwrap();
@@ -202,14 +209,14 @@ fn connect_natives() {
     let addrs = [next_addr()];
     do_all(&[
         &|x| {
-            x.configure(CHAIN).unwrap();
+            x.configure(CHAIN, b"main").unwrap();
             x.bind_port(0, Native).unwrap();
             x.bind_port(1, Passive(addrs[0])).unwrap();
             x.connect(timeout).unwrap();
             assert_eq!(0, x.sync(timeout).unwrap());
         },
         &|x| {
-            x.configure(CHAIN).unwrap();
+            x.configure(CHAIN, b"main").unwrap();
             x.bind_port(0, Active(addrs[0])).unwrap();
             x.bind_port(1, Native).unwrap();
             x.connect(timeout).unwrap();
@@ -231,7 +238,7 @@ fn forward() {
     do_all(&[
         //
         &|x| {
-            x.configure(FORWARD).unwrap();
+            x.configure(FORWARD, b"main").unwrap();
             x.bind_port(0, Native).unwrap();
             x.bind_port(1, Passive(addrs[0])).unwrap();
             x.connect(timeout).unwrap();
@@ -241,7 +248,7 @@ fn forward() {
             assert_eq!(0, x.sync(timeout).unwrap());
         },
         &|x| {
-            x.configure(FORWARD).unwrap();
+            x.configure(FORWARD, b"main").unwrap();
             x.bind_port(0, Active(addrs[0])).unwrap();
             x.bind_port(1, Native).unwrap();
             x.connect(timeout).unwrap();
