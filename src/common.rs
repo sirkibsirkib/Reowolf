@@ -44,6 +44,7 @@ pub enum Polarity {
 #[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Copy, Clone, Debug)]
 pub struct Key(u64);
 
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum MainComponentErr {
     NoSuchComponent,
     NonPortTypeParameters,

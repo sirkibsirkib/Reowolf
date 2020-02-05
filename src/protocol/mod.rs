@@ -42,43 +42,59 @@ impl ProtocolDescription for ProtocolDescriptionImpl {
             }
         }
     }
-    // fn main_interface_polarities(&self) -> Vec<Polarity> {
-    //     let def = &self.heap[self.main];
-    //     let mut result = Vec::new();
-    //     for &param in def.parameters().iter() {
-    //         let param = &self.heap[param];
-    //         let type_annot = &self.heap[param.type_annotation];
-    //         let ptype = &type_annot.the_type.primitive;
-    //         if ptype == &PrimitiveType::Input {
-    //             result.push(Polarity::Getter)
-    //         } else if ptype == &PrimitiveType::Output {
-    //             result.push(Polarity::Putter)
-    //         } else {
-    //             unreachable!()
-    //         }
-    //     }
-    //     result
-    // }
-    fn new_main_component(&self, identifier: &[u8], ports: &[(Polarity, Key)]) -> Result<ComponentStateImpl, NewMainErr> {
-        // Find symbol with identifier
-        let def = self.heap[self.root].get_definition_ident(&heap, identifier);
+    fn component_polarities(&self, identifier: &[u8]) -> Result<Vec<Polarity>, MainComponentErr> {
+        let h = &self.heap;
+        let root = &h[self.root];
+        let def = root.get_definition_ident(h, identifier);
         if def.is_none() {
-            return Err(NewMainErr::NoSuchComponent);
+            return Err(MainComponentErr::NoSuchComponent);
         }
-        let def = &self.heap[def.unwrap()];
+        let def = &h[def.unwrap()];
         if !def.is_component() {
-            return Err(NewMainErr::NoSuchComponent);
+            return Err(MainComponentErr::NoSuchComponent);
         }
-        let main = def.as_component().this();
-        //
-        let mut args = Vec::new();
-        for &(x, y) in ports.iter() {
-            match x {
-                Polarity::Getter => args.push(Value::Input(InputValue(y))),
-                Polarity::Putter => args.push(Value::Output(OutputValue(y))),
+        for &param in def.parameters().iter() {
+            let param = &h[param];
+            let type_annot = &h[param.type_annotation];
+            if type_annot.the_type.array {
+                return Err(MainComponentErr::NonPortTypeParameters);
+            }
+            match type_annot.the_type.primitive {
+                PrimitiveType::Input | PrimitiveType::Output => continue,
+                _ => {
+                    return Err(MainComponentErr::NonPortTypeParameters);
+                }
             }
         }
-        ComponentStateImpl { prompt: Prompt::new(&self.heap, self.main.upcast(), &args) }
+        let mut result = Vec::new();
+        for &param in def.parameters().iter() {
+            let param = &h[param];
+            let type_annot = &h[param.type_annotation];
+            let ptype = &type_annot.the_type.primitive;
+            if ptype == &PrimitiveType::Input {
+                result.push(Polarity::Getter)
+            } else if ptype == &PrimitiveType::Output {
+                result.push(Polarity::Putter)
+            } else {
+                unreachable!()
+            }
+        }
+        Ok(result)
+    }
+    fn new_main_component(&self, identifier: &[u8], ports: &[Key]) -> ComponentStateImpl {
+        let mut args = Vec::new();
+        for (&x, y) in ports.iter().zip(self.component_polarities(identifier).unwrap()) {
+            match y {
+                Polarity::Getter => args.push(Value::Input(InputValue(x))),
+                Polarity::Putter => args.push(Value::Output(OutputValue(x)))
+            }
+        }
+        let h = &self.heap;
+        let root = &h[self.root];
+        let def = root.get_definition_ident(h, identifier).unwrap();
+        ComponentStateImpl {
+            prompt: Prompt::new(h, def, &args)
+        }
     }
 }
 
