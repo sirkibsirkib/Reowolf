@@ -44,21 +44,20 @@ pub enum Polarity {
 #[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Copy, Clone, Debug)]
 pub struct Key(u64);
 
-pub enum NewMainErr {
+pub enum MainComponentErr {
     NoSuchComponent,
     NonPortTypeParameters,
-    WrongNumberOfArguments { expected: usize },
-    WrongPortPolarity { index: usize },
 }
 pub trait ProtocolDescription: Sized {
     type S: ComponentState<D = Self>;
 
     fn parse(pdl: &[u8]) -> Result<Self, String>;
+    fn component_polarities(&self, identifier: &[u8]) -> Result<Vec<Polarity>, MainComponentErr>;
     fn new_main_component(
         &self,
         identifier: &[u8],
-        ports: &[(Polarity, Key)],
-    ) -> Result<Self::S, NewMainErr>;
+        ports: &[Key],
+    ) -> Result<Self::S, MainComponentErr>;
 }
 
 pub trait ComponentState: Sized + Clone {
