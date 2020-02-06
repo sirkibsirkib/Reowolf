@@ -385,6 +385,56 @@ fn alternator_2() {
     ]);
 }
 
+static CHAIN: &[u8] = b"
+primitive sync(in i, out o) {
+    while(true) synchronous {
+        if (fires(i)) put(o, get(i));
+    }
+}
+composite sync_2(in i, out o) {
+    channel x -> y;
+    new sync(i, x);
+    new sync(y, o);
+}";
+
+#[test]
+fn composite_chain() {
+    /*
+    Alice -->sync-->sync-->A|P-->sync-->sync--> Bob
+    */
+    let timeout = Duration::from_millis(1_500);
+    let addrs = [next_addr(), next_addr()];
+    const N: usize = 1;
+    static MSG: &[u8] = b"Hi, there.";
+    do_all(&[
+        //
+        &|x| {
+            // Alice
+            x.configure(CHAIN, b"sync_2").unwrap();
+            x.bind_port(0, Native).unwrap();
+            x.bind_port(1, Active(addrs[0])).unwrap();
+            x.connect(timeout).unwrap();
+            for _ in 0..N {
+                x.put(0, MSG.to_vec()).unwrap();
+                assert_eq!(0, x.sync(timeout).unwrap());
+            }
+        },
+        &|x| {
+            // Bob
+            x.configure(CHAIN, b"sync_2").unwrap();
+            x.bind_port(0, Passive(addrs[0])).unwrap();
+            x.bind_port(1, Native).unwrap();
+            x.connect(timeout).unwrap();
+            for _ in 0..N {
+                // get msg round
+                x.get(0).unwrap();
+                assert_eq!(Ok(0), x.sync(timeout));
+                assert_eq!(Ok(MSG), x.read_gotten(0));
+            }
+        },
+    ]);
+}
+
 static PARITY_ROUTER: &[u8] = b"
 primitive parity_router(in i, out odd, out even) {
     while(true) synchronous {
