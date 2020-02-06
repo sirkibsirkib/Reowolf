@@ -1,9 +1,7 @@
+use super::*;
 use crate::common::*;
 use crate::runtime::*;
-
 use PortBinding::*;
-
-use super::*;
 
 #[test]
 fn config_ok_0() {
@@ -29,33 +27,6 @@ fn config_non_port() {
 }
 
 #[test]
-fn config_and_connect_2() {
-    let timeout = Duration::from_millis(1_500);
-    let addrs = ["127.0.0.1:9000".parse().unwrap(), "127.0.0.1:9001".parse().unwrap()];
-    use std::thread;
-    let handles = vec![
-        //
-        thread::spawn(move || {
-            let mut x = Connector::Unconfigured(Unconfigured { controller_id: 0 });
-            x.configure(b"primitive main(in a, out b) {}", b"main").unwrap();
-            x.bind_port(0, Passive(addrs[0])).unwrap();
-            x.bind_port(1, Passive(addrs[1])).unwrap();
-            x.connect(timeout).unwrap();
-        }),
-        thread::spawn(move || {
-            let mut x = Connector::Unconfigured(Unconfigured { controller_id: 1 });
-            x.configure(b"primitive main(out a, in b) {}", b"main").unwrap();
-            x.bind_port(0, Active(addrs[0])).unwrap();
-            x.bind_port(1, Active(addrs[1])).unwrap();
-            x.connect(timeout).unwrap();
-        }),
-    ];
-    for h in handles {
-        handle(h.join())
-    }
-}
-
-#[test]
 fn bind_too_much() {
     let mut x = Connector::Unconfigured(Unconfigured { controller_id: 0 });
     x.configure(b"primitive main(in a) {}", b"main").unwrap();
@@ -64,48 +35,55 @@ fn bind_too_much() {
 }
 
 #[test]
+fn config_and_connect_2() {
+    let timeout = Duration::from_millis(1_500);
+    let addrs = [next_addr(), next_addr()];
+    assert!(do_all(&[
+        &|x| {
+            x.configure(b"primitive main(in a, out b) {}", b"main").unwrap();
+            x.bind_port(0, Passive(addrs[0])).unwrap();
+            x.bind_port(1, Passive(addrs[1])).unwrap();
+            x.connect(timeout).unwrap();
+        },
+        &|x| {
+            x.configure(b"primitive main(out a, in b) {}", b"main").unwrap();
+            x.bind_port(0, Active(addrs[0])).unwrap();
+            x.bind_port(1, Active(addrs[1])).unwrap();
+            x.connect(timeout).unwrap();
+        },
+    ]));
+}
+
+#[test]
 fn config_and_connect_chain() {
     let timeout = Duration::from_millis(1_500);
-    let addrs = [
-        "127.0.0.1:9002".parse().unwrap(),
-        "127.0.0.1:9003".parse().unwrap(),
-        "127.0.0.1:9004".parse().unwrap(),
-    ];
-    use std::thread;
-    let handles = vec![
-        //
-        thread::spawn(move || {
+    let addrs = [next_addr(), next_addr(), next_addr()];
+    assert!(do_all(&[
+        &|x| {
             // PRODUCER A->
-            let mut x = Connector::Unconfigured(Unconfigured { controller_id: 0 });
             x.configure(b"primitive main(out a) {}", b"main").unwrap();
             x.bind_port(0, Active(addrs[0])).unwrap();
             x.connect(timeout).unwrap();
-        }),
-        thread::spawn(move || {
+        },
+        &|x| {
             // FORWARDER ->B->
-            let mut x = Connector::Unconfigured(Unconfigured { controller_id: 1 });
             x.configure(b"primitive main(in a, out b) {}", b"main").unwrap();
             x.bind_port(0, Passive(addrs[0])).unwrap();
             x.bind_port(1, Active(addrs[1])).unwrap();
             x.connect(timeout).unwrap();
-        }),
-        thread::spawn(move || {
+        },
+        &|x| {
             // FORWARDER ->C->
-            let mut x = Connector::Unconfigured(Unconfigured { controller_id: 2 });
             x.configure(b"primitive main(in a, out b) {}", b"main").unwrap();
             x.bind_port(0, Passive(addrs[1])).unwrap();
             x.bind_port(1, Active(addrs[2])).unwrap();
             x.connect(timeout).unwrap();
-        }),
-        thread::spawn(move || {
+        },
+        &|x| {
             // CONSUMER ->D
-            let mut x = Connector::Unconfigured(Unconfigured { controller_id: 3 });
             x.configure(b"primitive main(in a) {}", b"main").unwrap();
             x.bind_port(0, Passive(addrs[2])).unwrap();
             x.connect(timeout).unwrap();
-        }),
-    ];
-    for h in handles {
-        handle(h.join())
-    }
+        },
+    ]));
 }

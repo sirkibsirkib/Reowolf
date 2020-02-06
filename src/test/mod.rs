@@ -2,9 +2,22 @@ use crate::common::ControllerId;
 use crate::runtime::Connector;
 use crate::runtime::Unconfigured;
 use core::fmt::Debug;
+use std::net::SocketAddr;
 
 mod connector;
 mod setup;
+
+// using a static AtomicU16, shared between all tests in the binary,
+// allocate and return a socketaddr of the form 127.0.0.1:X where X in 7000..
+fn next_addr() -> SocketAddr {
+    use std::{
+        net::{Ipv4Addr, SocketAddrV4},
+        sync::atomic::{AtomicU16, Ordering::SeqCst},
+    };
+    static TEST_PORT: AtomicU16 = AtomicU16::new(7_000);
+    let port = TEST_PORT.fetch_add(1, SeqCst);
+    SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), port).into()
+}
 
 struct Panicked(Box<dyn std::any::Any>);
 impl Debug for Panicked {
@@ -24,7 +37,11 @@ fn handle(result: Result<(), Box<(dyn std::any::Any + Send + 'static)>>) {
     }
 }
 
-fn do_all(i: &[&(dyn Fn(&mut Connector) + Sync)]) {
+// Given a set of tasks (where each is some function that interacts with a connector)
+// run each task in in its own thread.
+// print the log and OK/PANIC result of each thread
+// then finally, return true IFF no threads panicked
+fn do_all(i: &[&(dyn Fn(&mut Connector) + Sync)]) -> bool {
     let cid_iter = 0..(i.len() as ControllerId);
     let mut connectors = cid_iter
         .clone()
@@ -44,7 +61,7 @@ fn do_all(i: &[&(dyn Fn(&mut Connector) + Sync)]) {
     })
     .unwrap();
 
-    let mut failures = false;
+    let mut alright = true;
 
     for ((controller_id, connector), res) in
         cid_iter.zip(connectors.iter_mut()).zip(results.into_iter())
@@ -57,12 +74,10 @@ fn do_all(i: &[&(dyn Fn(&mut Connector) + Sync)]) {
         match res {
             Ok(()) => println!("CID {:?} OK!", controller_id),
             Err(e) => {
-                failures = true;
+                alright = false;
                 println!("CI {:?} PANIC! {:?}", controller_id, Panicked(e));
             }
         };
     }
-    if failures {
-        panic!("FAILURES!");
-    }
+    alright
 }

@@ -5,18 +5,6 @@ use super::*;
 use crate::common::*;
 use crate::runtime::{errors::*, PortBinding::*};
 
-// using a static AtomicU16, shared between all tests in the binary,
-// allocate and return a socketaddr of the form 127.0.0.1:X where X in 7000..
-fn next_addr() -> SocketAddr {
-    use std::{
-        net::{Ipv4Addr, SocketAddrV4},
-        sync::atomic::{AtomicU16, Ordering::SeqCst},
-    };
-    static TEST_PORT: AtomicU16 = AtomicU16::new(7_000);
-    let port = TEST_PORT.fetch_add(1, SeqCst);
-    SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), port).into()
-}
-
 static PDL: &[u8] = b"
 primitive blocked(in i, out o) {
     while(true) synchronous {}
@@ -75,7 +63,7 @@ fn connects_ok() {
     */
     let timeout = Duration::from_millis(1_500);
     let addrs = [next_addr()];
-    do_all(&[
+    assert!(do_all(&[
         &|x| {
             // Alice
             x.configure(PDL, b"blocked").unwrap();
@@ -90,7 +78,7 @@ fn connects_ok() {
             x.bind_port(1, Native).unwrap();
             x.connect(timeout).unwrap();
         },
-    ]);
+    ]));
 }
 
 #[test]
@@ -101,7 +89,7 @@ fn connected_but_silent_natives() {
     */
     let timeout = Duration::from_millis(1_500);
     let addrs = [next_addr()];
-    do_all(&[
+    assert!(do_all(&[
         &|x| {
             // Alice
             x.configure(PDL, b"blocked").unwrap();
@@ -118,7 +106,7 @@ fn connected_but_silent_natives() {
             x.connect(timeout).unwrap();
             assert_eq!(Ok(0), x.sync(timeout));
         },
-    ]);
+    ]));
 }
 
 #[test]
@@ -134,7 +122,7 @@ fn self_forward_ok() {
     let timeout = Duration::from_millis(1_500);
     const N: usize = 5;
     static MSG: &[u8] = b"Echo!";
-    do_all(&[
+    assert!(do_all(&[
         //
         &|x| {
             // Alice
@@ -149,7 +137,7 @@ fn self_forward_ok() {
                 assert_eq!(Ok(MSG), x.read_gotten(1));
             }
         },
-    ]);
+    ]));
 }
 #[test]
 fn token_spout_ok() {
@@ -160,7 +148,7 @@ fn token_spout_ok() {
     */
     let timeout = Duration::from_millis(1_500);
     const N: usize = 5;
-    do_all(&[
+    assert!(do_all(&[
         //
         &|x| {
             // Alice
@@ -173,7 +161,7 @@ fn token_spout_ok() {
                 assert_eq!(Ok(&[] as &[u8]), x.read_gotten(0));
             }
         },
-    ]);
+    ]));
 }
 
 #[test]
@@ -184,7 +172,7 @@ fn waiter_ok() {
     Alice<--token_spout
     */
     let timeout = Duration::from_millis(1_500);
-    do_all(&[
+    assert!(do_all(&[
         //
         &|x| {
             // Alice
@@ -199,7 +187,7 @@ fn waiter_ok() {
             assert_eq!(Ok(0), x.sync(timeout));
             assert_eq!(Ok(&[] as &[u8]), x.read_gotten(0));
         },
-    ]);
+    ]));
 }
 
 #[test]
@@ -214,7 +202,7 @@ fn self_forward_timeout() {
     */
     let timeout = Duration::from_millis(500);
     static MSG: &[u8] = b"Echo!";
-    do_all(&[
+    assert!(do_all(&[
         //
         &|x| {
             // Sender
@@ -226,7 +214,7 @@ fn self_forward_timeout() {
             // native and forward components cannot find a solution
             assert_eq!(Err(SyncErr::Timeout), x.sync(timeout));
         },
-    ]);
+    ]));
 }
 
 #[test]
@@ -239,7 +227,8 @@ fn forward_det() {
     let addrs = [next_addr()];
     const N: usize = 5;
     static MSG: &[u8] = b"Hello!";
-    do_all(&[
+
+    assert!(do_all(&[
         &|x| {
             x.configure(PDL, b"forward").unwrap();
             x.bind_port(0, Native).unwrap();
@@ -261,7 +250,7 @@ fn forward_det() {
                 assert_eq!(Ok(MSG), x.read_gotten(0));
             }
         },
-    ]);
+    ]));
 }
 
 #[test]
@@ -275,7 +264,7 @@ fn nondet_proto_det_natives() {
     let addrs = [next_addr()];
     const N: usize = 5;
     static MSG: &[u8] = b"Message, here!";
-    do_all(&[
+    assert!(do_all(&[
         &|x| {
             // Alice
             x.configure(PDL, b"sync").unwrap();
@@ -299,7 +288,7 @@ fn nondet_proto_det_natives() {
                 assert_eq!(Ok(MSG), x.read_gotten(0));
             }
         },
-    ]);
+    ]));
 }
 
 #[test]
@@ -312,7 +301,7 @@ fn putter_determines() {
     let addrs = [next_addr()];
     const N: usize = 3;
     static MSG: &[u8] = b"Hidey ho!";
-    do_all(&[
+    assert!(do_all(&[
         //
         &|x| {
             // Alice
@@ -339,7 +328,7 @@ fn putter_determines() {
                 assert_eq!(Ok(MSG), x.read_gotten(0));
             }
         },
-    ]);
+    ]));
 }
 
 #[test]
@@ -352,7 +341,7 @@ fn getter_determines() {
     let addrs = [next_addr()];
     const N: usize = 5;
     static MSG: &[u8] = b"Hidey ho!";
-    do_all(&[
+    assert!(do_all(&[
         //
         &|x| {
             // Alice
@@ -380,7 +369,7 @@ fn getter_determines() {
                 assert_eq!(Ok(MSG), x.read_gotten(0));
             }
         },
-    ]);
+    ]));
 }
 
 #[test]
@@ -395,7 +384,7 @@ fn alternator_2() {
     let addrs = [next_addr(), next_addr()];
     const N: usize = 5;
     static MSG: &[u8] = b"message";
-    do_all(&[
+    assert!(do_all(&[
         //
         &|x| {
             // Sender
@@ -447,7 +436,7 @@ fn alternator_2() {
                 assert_eq!(Ok(MSG), x.read_gotten(0));
             }
         },
-    ]);
+    ]));
 }
 
 #[test]
@@ -461,7 +450,7 @@ fn composite_chain() {
     let addrs = [next_addr(), next_addr()];
     const N: usize = 1;
     static MSG: &[u8] = b"Hippity Hoppity";
-    do_all(&[
+    assert!(do_all(&[
         //
         &|x| {
             // Alice
@@ -487,7 +476,7 @@ fn composite_chain() {
                 assert_eq!(Ok(MSG), x.read_gotten(0));
             }
         },
-    ]);
+    ]));
 }
 
 #[test]
@@ -501,7 +490,7 @@ fn exchange() {
     let timeout = Duration::from_millis(1_500);
     let addrs = [next_addr(), next_addr()];
     const N: usize = 1;
-    do_all(&[
+    assert!(do_all(&[
         //
         &|x| {
             // Alice
@@ -533,7 +522,7 @@ fn exchange() {
                 assert_eq!(Ok(b"A->B" as &[u8]), x.read_gotten(0));
             }
         },
-    ]);
+    ]));
 }
 
 #[test]
@@ -548,7 +537,7 @@ fn filter_messages() {
     let timeout = Duration::from_millis(1_500);
     let addrs = [next_addr()];
     const N: usize = 1;
-    do_all(&[
+    assert!(do_all(&[
         //
         &|x| {
             // Sender
@@ -599,5 +588,5 @@ fn filter_messages() {
                 }
             }
         },
-    ]);
+    ]));
 }
