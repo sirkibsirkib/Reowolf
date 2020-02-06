@@ -31,17 +31,12 @@ impl Debug for Panicked {
         }
     }
 }
-fn handle(result: Result<(), Box<(dyn std::any::Any + Send + 'static)>>) {
-    if let Err(x) = result {
-        panic!("Worker panicked: {:?}", Panicked(x))
-    }
-}
 
 // Given a set of tasks (where each is some function that interacts with a connector)
 // run each task in in its own thread.
 // print the log and OK/PANIC result of each thread
 // then finally, return true IFF no threads panicked
-fn do_all(i: &[&(dyn Fn(&mut Connector) + Sync)]) -> bool {
+fn run_connector_set(i: &[&(dyn Fn(&mut Connector) + Sync)]) -> bool {
     let cid_iter = 0..(i.len() as ControllerId);
     let mut connectors = cid_iter
         .clone()

@@ -63,7 +63,7 @@ fn connects_ok() {
     */
     let timeout = Duration::from_millis(1_500);
     let addrs = [next_addr()];
-    assert!(do_all(&[
+    assert!(run_connector_set(&[
         &|x| {
             // Alice
             x.configure(PDL, b"blocked").unwrap();
@@ -89,7 +89,7 @@ fn connected_but_silent_natives() {
     */
     let timeout = Duration::from_millis(1_500);
     let addrs = [next_addr()];
-    assert!(do_all(&[
+    assert!(run_connector_set(&[
         &|x| {
             // Alice
             x.configure(PDL, b"blocked").unwrap();
@@ -122,7 +122,7 @@ fn self_forward_ok() {
     let timeout = Duration::from_millis(1_500);
     const N: usize = 5;
     static MSG: &[u8] = b"Echo!";
-    assert!(do_all(&[
+    assert!(run_connector_set(&[
         //
         &|x| {
             // Alice
@@ -148,7 +148,7 @@ fn token_spout_ok() {
     */
     let timeout = Duration::from_millis(1_500);
     const N: usize = 5;
-    assert!(do_all(&[
+    assert!(run_connector_set(&[
         //
         &|x| {
             // Alice
@@ -172,7 +172,7 @@ fn waiter_ok() {
     Alice<--token_spout
     */
     let timeout = Duration::from_millis(1_500);
-    assert!(do_all(&[
+    assert!(run_connector_set(&[
         //
         &|x| {
             // Alice
@@ -202,7 +202,7 @@ fn self_forward_timeout() {
     */
     let timeout = Duration::from_millis(500);
     static MSG: &[u8] = b"Echo!";
-    assert!(do_all(&[
+    assert!(run_connector_set(&[
         //
         &|x| {
             // Sender
@@ -228,7 +228,7 @@ fn forward_det() {
     const N: usize = 5;
     static MSG: &[u8] = b"Hello!";
 
-    assert!(do_all(&[
+    assert!(run_connector_set(&[
         &|x| {
             x.configure(PDL, b"forward").unwrap();
             x.bind_port(0, Native).unwrap();
@@ -264,7 +264,7 @@ fn nondet_proto_det_natives() {
     let addrs = [next_addr()];
     const N: usize = 5;
     static MSG: &[u8] = b"Message, here!";
-    assert!(do_all(&[
+    assert!(run_connector_set(&[
         &|x| {
             // Alice
             x.configure(PDL, b"sync").unwrap();
@@ -301,7 +301,7 @@ fn putter_determines() {
     let addrs = [next_addr()];
     const N: usize = 3;
     static MSG: &[u8] = b"Hidey ho!";
-    assert!(do_all(&[
+    assert!(run_connector_set(&[
         //
         &|x| {
             // Alice
@@ -341,7 +341,7 @@ fn getter_determines() {
     let addrs = [next_addr()];
     const N: usize = 5;
     static MSG: &[u8] = b"Hidey ho!";
-    assert!(do_all(&[
+    assert!(run_connector_set(&[
         //
         &|x| {
             // Alice
@@ -384,7 +384,7 @@ fn alternator_2() {
     let addrs = [next_addr(), next_addr()];
     const N: usize = 5;
     static MSG: &[u8] = b"message";
-    assert!(do_all(&[
+    assert!(run_connector_set(&[
         //
         &|x| {
             // Sender
@@ -450,7 +450,7 @@ fn composite_chain() {
     let addrs = [next_addr(), next_addr()];
     const N: usize = 1;
     static MSG: &[u8] = b"Hippity Hoppity";
-    assert!(do_all(&[
+    assert!(run_connector_set(&[
         //
         &|x| {
             // Alice
@@ -490,7 +490,7 @@ fn exchange() {
     let timeout = Duration::from_millis(1_500);
     let addrs = [next_addr(), next_addr()];
     const N: usize = 1;
-    assert!(do_all(&[
+    assert!(run_connector_set(&[
         //
         &|x| {
             // Alice
@@ -537,7 +537,7 @@ fn filter_messages() {
     let timeout = Duration::from_millis(1_500);
     let addrs = [next_addr()];
     const N: usize = 1;
-    assert!(do_all(&[
+    assert!(run_connector_set(&[
         //
         &|x| {
             // Sender

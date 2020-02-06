@@ -38,7 +38,7 @@ fn bind_too_much() {
 fn config_and_connect_2() {
     let timeout = Duration::from_millis(1_500);
     let addrs = [next_addr(), next_addr()];
-    assert!(do_all(&[
+    assert!(run_connector_set(&[
         &|x| {
             x.configure(b"primitive main(in a, out b) {}", b"main").unwrap();
             x.bind_port(0, Passive(addrs[0])).unwrap();
@@ -58,7 +58,7 @@ fn config_and_connect_2() {
 fn config_and_connect_chain() {
     let timeout = Duration::from_millis(1_500);
     let addrs = [next_addr(), next_addr(), next_addr()];
-    assert!(do_all(&[
+    assert!(run_connector_set(&[
         &|x| {
             // PRODUCER A->
             x.configure(b"primitive main(out a) {}", b"main").unwrap();
