@@ -4,8 +4,8 @@ use crate::runtime::{actors::*, endpoint::*, errors::*, *};
 impl Controller {
     fn end_round_with_decision(&mut self, decision: Predicate) -> Result<(), SyncErr> {
         log!(&mut self.inner.logger, "ENDING ROUND WITH DECISION! {:?}", &decision);
-
-        let mut table_row = HashMap::default();
+        let mut table_row = HashMap::<Key, _>::default();
+        // 1. become_mono for Poly actors
         self.inner.mono_n = self
             .ephemeral
             .poly_n
@@ -14,10 +14,20 @@ impl Controller {
         self.inner.mono_ps.extend(
             self.ephemeral.poly_ps.drain(..).map(|m| m.become_mono(&decision, &mut table_row)),
         );
-        for (ekey, payload) in table_row {
-            let channel_id = self.inner.endpoint_exts.get(ekey).unwrap().info.channel_id;
+
+        // convert (Key=>Payload) map to (ChannelId=>Payload) map.
+        let table_row: HashMap<_, _> = table_row
+            .into_iter()
+            .map(|(ekey, msg)| {
+                let channel_id = self.inner.endpoint_exts.get(ekey).unwrap().info.channel_id;
+                (channel_id, msg)
+            })
+            .collect();
+        // log all firing ports
+        for (channel_id, payload) in table_row {
             log!(&mut self.inner.logger, "VALUE {:?} => Message({:?})", channel_id, payload);
         }
+        // log all silent ports
         for channel_id in decision.iter_matching(false) {
             log!(&mut self.inner.logger, "VALUE {:?} => *", channel_id);
         }
