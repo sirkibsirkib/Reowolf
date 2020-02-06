@@ -172,7 +172,7 @@ struct BranchPContext<'m, 'r> {
     inbox: &'r HashMap<Key, Payload>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub(crate) struct SolutionStorage {
     old_local: HashSet<Predicate>,
     new_local: HashSet<Predicate>,
@@ -229,7 +229,16 @@ trait Messengerlike {
 }
 
 /////////////////////////////////
-
+impl Debug for SolutionStorage {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.pad("Solutions: [")?;
+        for (subtree_id, &index) in self.subtree_id_to_index.iter() {
+            let sols = &self.subtree_solutions[index];
+            f.write_fmt(format_args!("{:?} => {:?}, ", subtree_id, sols))?;
+        }
+        f.pad("]")
+    }
+}
 impl From<EvalErr> for SyncErr {
     fn from(e: EvalErr) -> SyncErr {
         SyncErr::EvalErr(e)

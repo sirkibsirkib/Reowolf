@@ -402,7 +402,8 @@ impl Controller {
                 parent, major
             ),
         }
-        log!(logger, "{:?} DONE WITH ECHO", major);
+
+        log!(logger, "{:?} DONE WITH ECHO! Leader has cid={:?}", major, my_leader);
 
         // 3. broadcast leader announcement (except to parent: confirm they are your parent)
         //    in this loop, every node sends 1 message to each neighbor

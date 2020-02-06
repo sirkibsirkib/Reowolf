@@ -180,7 +180,7 @@ impl Connector {
         }
         let mono_n = connected.controller.inner.mono_n.as_ref().expect("controller has no mono_n?");
         let result = mono_n.result.as_ref().ok_or(NoPreviousRound)?;
-        let payload = result.1.get(&key).ok_or(DidntGet)?;
+        let payload = result.1.get(&key).ok_or(DidNotGet)?;
         Ok(payload)
     }
 }

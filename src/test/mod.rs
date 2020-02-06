@@ -49,7 +49,7 @@ fn do_all(i: &[&(dyn Fn(&mut Connector) + Sync)]) {
     for ((controller_id, connector), res) in
         cid_iter.zip(connectors.iter_mut()).zip(results.into_iter())
     {
-        println!("====================\n CID {:?} ...", controller_id);
+        println!("\n\n====================\n CID {:?} ...", controller_id);
         match connector.get_mut_logger() {
             Some(logger) => println!("{}", logger),
             None => println!("<No Log>"),

@@ -1,6 +1,6 @@
 use crate::common::*;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum PortBindErr {
     AlreadyConnected,
     IndexOutOfBounds,
@@ -8,22 +8,22 @@ pub enum PortBindErr {
     ParseErr,
     AlreadyConfigured,
 }
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ReadGottenErr {
     NotConnected,
     IndexOutOfBounds,
     WrongPolarity,
     NoPreviousRound,
-    DidntGet,
+    DidNotGet,
 }
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum PortOpErr {
     IndexOutOfBounds,
     NotConnected,
     WrongPolarity,
     DuplicateOperation,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConfigErr {
     AlreadyConnected,
     ParseErr(String),
@@ -31,7 +31,7 @@ pub enum ConfigErr {
     NoSuchComponent,
     NonPortTypeParameters,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ConnectErr {
     PortNotBound { native_index: usize },
     NotConfigured,
@@ -47,19 +47,19 @@ pub enum ConnectErr {
     PassiveConnectFailed(SocketAddr),
     BindFailed(SocketAddr),
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum PollDeadlineErr {
     PollingFailed,
     Timeout,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum EndpointErr {
     Disconnected,
     MetaProtocolDeviation,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum SyncErr {
     NotConnected,
     MessengerRecvErr(MessengerRecvErr),
@@ -72,11 +72,11 @@ pub enum SyncErr {
     EndpointErr(EndpointErr),
     EvalErr(EvalErr),
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum EvalErr {
     ComponentExitWhileBranching,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum MessengerRecvErr {
     PollingFailed,
     EndpointErr(EndpointErr),

@@ -276,7 +276,14 @@ impl Controller {
         log!(&mut self.inner.logger, "No decision yet. Time to recv messages");
         self.undelay_all();
         'recv_loop: loop {
-            let received = self.recv(deadline)?.ok_or(SyncErr::Timeout)?;
+            let received = self.recv(deadline)?.ok_or_else(|| {
+                log!(
+                    &mut self.inner.logger,
+                    ":( timing out. Solutions storage in state... {:#?}",
+                    &self.ephemeral.solution_storage
+                );
+                SyncErr::Timeout
+            })?;
             let current_content = match received.msg {
                 Msg::SetupMsg(_) => {
                     log!(&mut self.inner.logger, "recvd message {:?} and its SETUP :(", &received);
@@ -331,7 +338,6 @@ impl Controller {
                         subtree_id,
                         partial_oracle,
                     );
-
                     if self.handle_locals_maybe_decide()? {
                         return Ok(());
                     }
