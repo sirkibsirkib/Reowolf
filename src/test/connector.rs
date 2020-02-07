@@ -37,7 +37,8 @@ composite forward_pair(in ia, out oa, in ib, out ob) {
 primitive forward_nonzero(in i, out o) {
     while(true) synchronous {
         msg m = get(i);
-        if(m[0]==0) put(o, m);
+        assert(m[0] != 0);
+        put(o, m);
     }
 }
 primitive token_spout(out o) {
