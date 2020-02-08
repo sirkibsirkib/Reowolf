@@ -128,10 +128,7 @@ impl Endpoint {
                         Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break 'read_loop,
                         Ok(0) => break 'read_loop,
                         Ok(_) => (),
-                        Err(e) => {
-                            println!("BAD IS {:?}", e);
-                            panic!("BAD");
-                        }
+                        Err(_e) => return Err(EndpointErr::Disconnected),
                     }
                 }
                 use crate::runtime::serde::{De, MonitoredReader};

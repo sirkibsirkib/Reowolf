@@ -251,7 +251,7 @@ pub unsafe extern "C" fn connector_destroy(connector: *mut Connector) {
 /// # Safety
 /// TODO
 #[no_mangle]
-pub unsafe extern "C" fn port_put(
+pub unsafe extern "C" fn connector_put(
     connector: *mut Connector,
     proto_port_index: c_uint,
     buf_ptr: *mut c_uchar,
@@ -278,7 +278,7 @@ pub unsafe extern "C" fn port_put(
 /// # Safety
 /// TODO
 #[no_mangle]
-pub unsafe extern "C" fn port_get(connector: *mut Connector, proto_port_index: c_uint) -> c_int {
+pub unsafe extern "C" fn connector_get(connector: *mut Connector, proto_port_index: c_uint) -> c_int {
     let mut b = Box::from_raw(connector); // unsafe!
     let ret = b.get(proto_port_index.try_into().unwrap());
     Box::into_raw(b); // don't drop!
@@ -295,7 +295,7 @@ pub unsafe extern "C" fn port_get(connector: *mut Connector, proto_port_index: c
 /// # Safety
 /// TODO
 #[no_mangle]
-pub unsafe extern "C" fn read_gotten(
+pub unsafe extern "C" fn connector_gotten(
     connector: *mut Connector,
     proto_port_index: c_uint,
     buf_ptr_outptr: *mut *const c_uchar,
