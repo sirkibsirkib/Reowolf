@@ -1517,147 +1517,146 @@ impl Prompt {
         }
     }
     pub fn step(&mut self, h: &Heap, ctx: &mut EvalContext) -> EvalResult {
-        if let Some(stmt) = self.position {
-            let stmt = &h[stmt];
-            match stmt {
-                Statement::Block(stmt) => {
-                    // Continue to first statement
-                    self.position = Some(stmt.first());
-                    Err(EvalContinuation::Stepping)
-                }
-                Statement::Local(stmt) => {
-                    match stmt {
-                        LocalStatement::Memory(stmt) => {
-                            // Evaluate initial expression
-                            let value = self.store.eval(h, ctx, stmt.initial)?;
-                            // Update store
-                            self.store.initialize(h, stmt.variable.upcast(), value);
-                        }
-                        LocalStatement::Channel(stmt) => {
-                            let [from, to] = ctx.new_channel();
-                            // Store the values in the declared variables
-                            self.store.initialize(h, stmt.from.upcast(), from);
-                            self.store.initialize(h, stmt.to.upcast(), to);
-                        },
+        if self.position.is_none() {
+            return Err(EvalContinuation::Terminal);
+        }
+        let stmt = &h[self.position.unwrap()];
+        match stmt {
+            Statement::Block(stmt) => {
+                // Continue to first statement
+                self.position = Some(stmt.first());
+                Err(EvalContinuation::Stepping)
+            }
+            Statement::Local(stmt) => {
+                match stmt {
+                    LocalStatement::Memory(stmt) => {
+                        // Evaluate initial expression
+                        let value = self.store.eval(h, ctx, stmt.initial)?;
+                        // Update store
+                        self.store.initialize(h, stmt.variable.upcast(), value);
                     }
-                    // Continue to next statement
-                    self.position = stmt.next();
-                    Err(EvalContinuation::Stepping)
+                    LocalStatement::Channel(stmt) => {
+                        let [from, to] = ctx.new_channel();
+                        // Store the values in the declared variables
+                        self.store.initialize(h, stmt.from.upcast(), from);
+                        self.store.initialize(h, stmt.to.upcast(), to);
+                    },
                 }
-                Statement::Skip(stmt) => {
-                    // Continue to next statement
-                    self.position = stmt.next;
-                    Err(EvalContinuation::Stepping)
+                // Continue to next statement
+                self.position = stmt.next();
+                Err(EvalContinuation::Stepping)
+            }
+            Statement::Skip(stmt) => {
+                // Continue to next statement
+                self.position = stmt.next;
+                Err(EvalContinuation::Stepping)
+            }
+            Statement::Labeled(stmt) => {
+                // Continue to next statement
+                self.position = Some(stmt.body);
+                Err(EvalContinuation::Stepping)
+            }
+            Statement::If(stmt) => {
+                // Evaluate test
+                let value = self.store.eval(h, ctx, stmt.test)?;
+                // Continue with either branch
+                if value.as_boolean().0 {
+                    self.position = Some(stmt.true_body);
+                } else {
+                    self.position = Some(stmt.false_body);
                 }
-                Statement::Labeled(stmt) => {
-                    // Continue to next statement
+                Err(EvalContinuation::Stepping)
+            }
+            Statement::EndIf(stmt) => {
+                // Continue to next statement
+                self.position = stmt.next;
+                Err(EvalContinuation::Stepping)
+            }
+            Statement::While(stmt) => {
+                // Evaluate test
+                let value = self.store.eval(h, ctx, stmt.test)?;
+                // Either continue with body, or go to next
+                if value.as_boolean().0 {
                     self.position = Some(stmt.body);
-                    Err(EvalContinuation::Stepping)
+                } else {
+                    self.position = stmt.next.map(|x| x.upcast());
                 }
-                Statement::If(stmt) => {
-                    // Evaluate test
-                    let value = self.store.eval(h, ctx, stmt.test)?;
-                    // Continue with either branch
-                    if value.as_boolean().0 {
-                        self.position = Some(stmt.true_body);
-                    } else {
-                        self.position = Some(stmt.false_body);
-                    }
-                    Err(EvalContinuation::Stepping)
-                }
-                Statement::EndIf(stmt) => {
+                Err(EvalContinuation::Stepping)
+            }
+            Statement::EndWhile(stmt) => {
+                // Continue to next statement
+                self.position = stmt.next;
+                Err(EvalContinuation::Stepping)
+            }
+            Statement::Synchronous(stmt) => {
+                // Continue to next statement, and signal upward
+                self.position = Some(stmt.body);
+                Err(EvalContinuation::SyncBlockStart)
+            }
+            Statement::EndSynchronous(stmt) => {
+                // Continue to next statement, and signal upward
+                self.position = stmt.next;
+                Err(EvalContinuation::SyncBlockEnd)
+            }
+            Statement::Break(stmt) => {
+                // Continue to end of while
+                self.position = stmt.target.map(EndWhileStatementId::upcast);
+                Err(EvalContinuation::Stepping)
+            }
+            Statement::Continue(stmt) => {
+                // Continue to beginning of while
+                self.position = stmt.target.map(WhileStatementId::upcast);
+                Err(EvalContinuation::Stepping)
+            }
+            Statement::Assert(stmt) => {
+                // Evaluate expression
+                let value = self.store.eval(h, ctx, stmt.expression)?;
+                if value.as_boolean().0 {
                     // Continue to next statement
                     self.position = stmt.next;
                     Err(EvalContinuation::Stepping)
-                }
-                Statement::While(stmt) => {
-                    // Evaluate test
-                    let value = self.store.eval(h, ctx, stmt.test)?;
-                    // Either continue with body, or go to next
-                    if value.as_boolean().0 {
-                        self.position = Some(stmt.body);
-                    } else {
-                        self.position = stmt.next.map(|x| x.upcast());
-                    }
-                    Err(EvalContinuation::Stepping)
-                }
-                Statement::EndWhile(stmt) => {
-                    // Continue to next statement
-                    self.position = stmt.next;
-                    Err(EvalContinuation::Stepping)
-                }
-                Statement::Synchronous(stmt) => {
-                    // Continue to next statement, and signal upward
-                    self.position = Some(stmt.body);
-                    Err(EvalContinuation::SyncBlockStart)
-                }
-                Statement::EndSynchronous(stmt) => {
-                    // Continue to next statement, and signal upward
-                    self.position = stmt.next;
-                    Err(EvalContinuation::SyncBlockEnd)
-                }
-                Statement::Break(stmt) => {
-                    // Continue to end of while
-                    self.position = stmt.target.map(EndWhileStatementId::upcast);
-                    Err(EvalContinuation::Stepping)
-                }
-                Statement::Continue(stmt) => {
-                    // Continue to beginning of while
-                    self.position = stmt.target.map(WhileStatementId::upcast);
-                    Err(EvalContinuation::Stepping)
-                }
-                Statement::Assert(stmt) => {
-                    // Evaluate expression
-                    let value = self.store.eval(h, ctx, stmt.expression)?;
-                    if value.as_boolean().0 {
-                        // Continue to next statement
-                        self.position = stmt.next;
-                        Err(EvalContinuation::Stepping)
-                    } else {
-                        // Assertion failed: inconsistent
-                        Err(EvalContinuation::Inconsistent)
-                    }
-                }
-                Statement::Return(stmt) => {
-                    // Evaluate expression
-                    let value = self.store.eval(h, ctx, stmt.expression)?;
-                    // Done with evaluation
-                    Ok(value)
-                }
-                Statement::Goto(stmt) => {
-                    // Continue to target
-                    self.position = stmt.target.map(|x| x.upcast());
-                    Err(EvalContinuation::Stepping)
-                }
-                Statement::New(stmt) => {
-                    let expr = &h[stmt.expression];
-                    let mut args = Vec::new();
-                    for &arg in expr.arguments.iter() {
-                        let value = self.store.eval(h, ctx, arg)?;
-                        args.push(value);
-                    }
-                    self.position = stmt.next;
-                    Err(EvalContinuation::NewComponent(expr.declaration.unwrap(), args))
-                }
-                Statement::Put(stmt) => {
-                    // Evaluate port and message
-                    let port = self.store.eval(h, ctx, stmt.port)?;
-                    let message = self.store.eval(h, ctx, stmt.message)?;
-                    // Continue to next statement
-                    self.position = stmt.next;
-                    // Signal the put upwards
-                    Err(EvalContinuation::Put(port, message))
-                }
-                Statement::Expression(stmt) => {
-                    // Evaluate expression
-                    let value = self.store.eval(h, ctx, stmt.expression)?;
-                    // Continue to next statement
-                    self.position = stmt.next;
-                    Err(EvalContinuation::Stepping)
+                } else {
+                    // Assertion failed: inconsistent
+                    Err(EvalContinuation::Inconsistent)
                 }
             }
-        } else {
-            Err(EvalContinuation::Terminal)
+            Statement::Return(stmt) => {
+                // Evaluate expression
+                let value = self.store.eval(h, ctx, stmt.expression)?;
+                // Done with evaluation
+                Ok(value)
+            }
+            Statement::Goto(stmt) => {
+                // Continue to target
+                self.position = stmt.target.map(|x| x.upcast());
+                Err(EvalContinuation::Stepping)
+            }
+            Statement::New(stmt) => {
+                let expr = &h[stmt.expression];
+                let mut args = Vec::new();
+                for &arg in expr.arguments.iter() {
+                    let value = self.store.eval(h, ctx, arg)?;
+                    args.push(value);
+                }
+                self.position = stmt.next;
+                Err(EvalContinuation::NewComponent(expr.declaration.unwrap(), args))
+            }
+            Statement::Put(stmt) => {
+                // Evaluate port and message
+                let port = self.store.eval(h, ctx, stmt.port)?;
+                let message = self.store.eval(h, ctx, stmt.message)?;
+                // Continue to next statement
+                self.position = stmt.next;
+                // Signal the put upwards
+                Err(EvalContinuation::Put(port, message))
+            }
+            Statement::Expression(stmt) => {
+                // Evaluate expression
+                let value = self.store.eval(h, ctx, stmt.expression)?;
+                // Continue to next statement
+                self.position = stmt.next;
+                Err(EvalContinuation::Stepping)
+            }
         }
     }
     fn compute_function(h: &Heap, fun: FunctionId, args: &Vec<Value>) -> Option<Value> {

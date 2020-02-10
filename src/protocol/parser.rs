@@ -1081,6 +1081,13 @@ impl LinkStatements {
 }
 
 impl Visitor for LinkStatements {
+    fn visit_symbol_definition(&mut self, h: &mut Heap, def: DefinitionId) -> VisitorResult {
+        assert!(self.prev.is_none());
+        recursive_symbol_definition(self, h, def)?;
+        // Clear out last statement
+        self.prev = None;
+        Ok(())
+    }
     fn visit_statement(&mut self, h: &mut Heap, stmt: StatementId) -> VisitorResult {
         if let Some(UniqueStatementId(prev)) = self.prev.take() {
             h[prev].link_next(stmt);
