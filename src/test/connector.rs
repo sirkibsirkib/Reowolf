@@ -41,9 +41,14 @@ composite sync_2(in i, out o) {
     new sync(i, x);
     new sync(y, o);
 }
-composite forward_pair(in ia, out oa, in ib, out ob) {
-    new forward(ia, oa);
-    new forward(ib, ob);
+primitive exchange(in ai, out ao, in bi, out bo) {
+    // Note the implicit causal relationship
+    while(true) synchronous {
+        if(fires(ai)) {
+            put(bo, get(ai));
+            put(ao, get(bi));
+        }
+    }
 }
 primitive forward_nonzero(in i, out o) {
     while(true) synchronous {
@@ -518,7 +523,6 @@ fn alternator_2() {
 }
 
 #[test]
-// PANIC TODO: eval::1536
 fn composite_chain_a() {
     // Check if composition works. Forward messages through long chains
     /*
@@ -558,7 +562,6 @@ fn composite_chain_a() {
 }
 
 #[test]
-// PANIC TODO: eval::1536
 fn composite_chain_b() {
     // Check if composition works. Forward messages through long chains
     /*
@@ -598,12 +601,11 @@ fn composite_chain_b() {
 }
 
 #[test]
-// PANIC TODO: eval::1605
 fn exchange() {
     /*
-        /-->forward-->P|A-->forward-->\
-    Alice                             Bob
-        \<--forward<--P|A<--forward<--/
+        /-->\      /-->P|A-->\      /-->\
+    Alice   exchange         exchange   Bob
+        \<--/      \<--P|A<--/      \<--/
     */
     let timeout = Duration::from_millis(1_500);
     let addrs = [next_addr(), next_addr()];
@@ -612,39 +614,38 @@ fn exchange() {
         //
         &|x| {
             // Alice
-            x.configure(PDL, b"forward_pair").unwrap();
+            x.configure(PDL, b"exchange").unwrap();
             x.bind_port(0, Native).unwrap(); // native in
-            x.bind_port(1, Passive(addrs[0])).unwrap(); // peer out
-            x.bind_port(2, Passive(addrs[1])).unwrap(); // peer in
-            x.bind_port(3, Native).unwrap(); // native out
+            x.bind_port(1, Native).unwrap(); // native out
+            x.bind_port(2, Passive(addrs[0])).unwrap(); // peer out
+            x.bind_port(3, Passive(addrs[1])).unwrap(); // peer in
             x.connect(timeout).unwrap();
             for _ in 0..N {
-                x.put(0, b"A->B".to_vec()).unwrap();
-                x.get(1).unwrap();
+                assert_eq!(Ok(()), x.put(0, b"A->B".to_vec()));
+                assert_eq!(Ok(()), x.get(1));
                 assert_eq!(Ok(0), x.sync(timeout));
-                assert_eq!(Ok(b"B->A" as &[u8]), x.read_gotten(0));
+                assert_eq!(Ok(b"B->A" as &[u8]), x.read_gotten(1));
             }
         },
         &|x| {
             // Bob
-            x.configure(PDL, b"forward_pair").unwrap();
+            x.configure(PDL, b"exchange").unwrap();
             x.bind_port(0, Native).unwrap(); // native in
-            x.bind_port(1, Active(addrs[1])).unwrap(); // peer out
-            x.bind_port(2, Active(addrs[0])).unwrap(); // peer in
-            x.bind_port(3, Native).unwrap(); // native out
+            x.bind_port(1, Native).unwrap(); // native out
+            x.bind_port(2, Active(addrs[1])).unwrap(); // peer out
+            x.bind_port(3, Active(addrs[0])).unwrap(); // peer in
             x.connect(timeout).unwrap();
             for _ in 0..N {
-                x.put(0, b"B->A".to_vec()).unwrap();
-                x.get(1).unwrap();
+                assert_eq!(Ok(()), x.put(0, b"B->A".to_vec()));
+                assert_eq!(Ok(()), x.get(1));
                 assert_eq!(Ok(0), x.sync(timeout));
-                assert_eq!(Ok(b"A->B" as &[u8]), x.read_gotten(0));
+                assert_eq!(Ok(b"A->B" as &[u8]), x.read_gotten(1));
             }
         },
     ]));
 }
 
 #[test]
-// THIS DOES NOT YET WORK. TODOS are hit
 fn filter_messages() {
     // Make a protocol whose behavior depends on the contents of messages
     // Getter prohibits the receipt of messages of the form [0, ...].

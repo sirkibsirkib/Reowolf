@@ -6,11 +6,10 @@ impl Controller {
         log!(&mut self.inner.logger, "ENDING ROUND WITH DECISION! {:?}", &decision);
         let mut table_row = HashMap::<Key, _>::default();
         // 1. become_mono for Poly actors
-        self.inner.mono_n = self
-            .ephemeral
-            .poly_n
-            .take()
-            .map(|poly_n| poly_n.become_mono(&decision, &mut table_row));
+        self.inner.mono_n =
+            self.ephemeral.poly_n.take().map(|poly_n| {
+                poly_n.become_mono(&mut self.inner.logger, &decision, &mut table_row)
+            });
         self.inner.mono_ps.extend(
             self.ephemeral.poly_ps.drain(..).map(|m| m.become_mono(&decision, &mut table_row)),
         );
@@ -124,7 +123,7 @@ impl Controller {
             }
             log!(
                 &mut self.inner.logger,
-                "... Initial native branch (batch index={} with pred {:?}",
+                "... Initial native branch batch index={} with pred {:?}",
                 sync_batch_index,
                 &predicate
             );

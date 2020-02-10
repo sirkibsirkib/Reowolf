@@ -381,20 +381,29 @@ impl PolyN {
 
     pub fn become_mono(
         mut self,
+        logger: &mut String,
         decision: &Predicate,
         table_row: &mut HashMap<Key, Payload>,
     ) -> MonoN {
-        if let Some((_, branch)) = self
+        log!(
+            logger,
+            "decision {:?} with branch preds {:?}",
+            decision,
+            self.branches.iter().collect::<Vec<_>>()
+        );
+        if let Some((branch_pred, branch)) = self
             .branches
             .drain()
             .find(|(p, branch)| branch.to_get.is_empty() && decision.satisfies(p))
         {
+            log!(logger, "decision {:?} mapped to branch {:?}", decision, branch_pred);
             let BranchN { gotten, sync_batch_index, .. } = branch;
             for (&key, payload) in gotten.iter() {
                 assert!(table_row.insert(key, payload.clone()).is_none());
             }
             MonoN { ekeys: self.ekeys, result: Some((sync_batch_index, gotten)) }
         } else {
+            log!(logger, "decision {:?} HAD NO SOLUTION!!?", decision);
             panic!("No such solution!")
         }
     }

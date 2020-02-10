@@ -386,7 +386,7 @@ impl Predicate {
                         s = s_it.next();
                     } else if sid > oid {
                         // s is missing this element
-                        o_not_s.push((sid, sb));
+                        o_not_s.push((oid, ob));
                         o = o_it.next();
                     } else if sb != ob {
                         assert_eq!(sid, oid);
@@ -408,11 +408,11 @@ impl Predicate {
             [false, false] => {
                 // ... which is the union of the predicates' assignments but
                 //     is equivalent to neither self nor other.
-                let mut predicate = self.clone();
+                let mut new = self.clone();
                 for (&id, &b) in o_not_s {
-                    predicate.assigned.insert(id, b);
+                    new.assigned.insert(id, b);
                 }
-                New(predicate)
+                New(new)
             }
         }
     }
