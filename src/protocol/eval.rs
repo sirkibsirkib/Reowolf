@@ -222,282 +222,278 @@ impl Value {
         }
     }
     fn plus(&self, other: &Value) -> Value {
-        // TODO: do a match on the value directly
-        assert!(!self.exact_type().array);
-        assert!(!other.exact_type().array);
-        match (self.exact_type().primitive, other.exact_type().primitive) {
-            (PrimitiveType::Byte, PrimitiveType::Byte) => {
-                Value::Byte(ByteValue(i8::from(self) + i8::from(other)))
+        match (self, other) {
+            (Value::Byte(ByteValue(s)), Value::Byte(ByteValue(o))) => {
+                Value::Byte(ByteValue(*s + *o))
             }
-            (PrimitiveType::Byte, PrimitiveType::Short) => {
-                Value::Short(ShortValue(i16::from(self) + i16::from(other)))
+            (Value::Byte(ByteValue(s)), Value::Short(ShortValue(o))) => {
+                Value::Short(ShortValue(*s as i16 + *o))
             }
-            (PrimitiveType::Byte, PrimitiveType::Int) => {
-                Value::Int(IntValue(i32::from(self) + i32::from(other)))
+            (Value::Byte(ByteValue(s)), Value::Int(IntValue(o))) => {
+                Value::Int(IntValue(*s as i32 + *o))
             }
-            (PrimitiveType::Byte, PrimitiveType::Long) => {
-                Value::Long(LongValue(i64::from(self) + i64::from(other)))
+            (Value::Byte(ByteValue(s)), Value::Long(LongValue(o))) => {
+                Value::Long(LongValue(*s as i64 + *o))
             }
-            (PrimitiveType::Short, PrimitiveType::Byte) => {
-                Value::Short(ShortValue(i16::from(self) + i16::from(other)))
+            (Value::Short(ShortValue(s)), Value::Byte(ByteValue(o))) => {
+                Value::Short(ShortValue(*s + *o as i16))
             }
-            (PrimitiveType::Short, PrimitiveType::Short) => {
-                Value::Short(ShortValue(i16::from(self) + i16::from(other)))
+            (Value::Short(ShortValue(s)), Value::Short(ShortValue(o))) => {
+                Value::Short(ShortValue(*s + *o))
             }
-            (PrimitiveType::Short, PrimitiveType::Int) => {
-                Value::Int(IntValue(i32::from(self) + i32::from(other)))
+            (Value::Short(ShortValue(s)), Value::Int(IntValue(o))) => {
+                Value::Int(IntValue(*s as i32 + *o))
             }
-            (PrimitiveType::Short, PrimitiveType::Long) => {
-                Value::Long(LongValue(i64::from(self) + i64::from(other)))
+            (Value::Short(ShortValue(s)), Value::Long(LongValue(o))) => {
+                Value::Long(LongValue(*s as i64 + *o))
             }
-            (PrimitiveType::Int, PrimitiveType::Byte) => {
-                Value::Int(IntValue(i32::from(self) + i32::from(other)))
+            (Value::Int(IntValue(s)), Value::Byte(ByteValue(o))) => {
+                Value::Int(IntValue(*s + *o as i32))
             }
-            (PrimitiveType::Int, PrimitiveType::Short) => {
-                Value::Int(IntValue(i32::from(self) + i32::from(other)))
+            (Value::Int(IntValue(s)), Value::Short(ShortValue(o))) => {
+                Value::Int(IntValue(*s + *o as i32))
             }
-            (PrimitiveType::Int, PrimitiveType::Int) => {
-                Value::Int(IntValue(i32::from(self) + i32::from(other)))
+            (Value::Int(IntValue(s)), Value::Int(IntValue(o))) => {
+                Value::Int(IntValue(*s + *o))
             }
-            (PrimitiveType::Int, PrimitiveType::Long) => {
-                Value::Long(LongValue(i64::from(self) + i64::from(other)))
+            (Value::Int(IntValue(s)), Value::Long(LongValue(o))) => {
+                Value::Long(LongValue(*s as i64 + *o))
             }
-            (PrimitiveType::Long, PrimitiveType::Byte) => {
-                Value::Long(LongValue(i64::from(self) + i64::from(other)))
+            (Value::Long(LongValue(s)), Value::Byte(ByteValue(o))) => {
+                Value::Long(LongValue(*s + *o as i64))
             }
-            (PrimitiveType::Long, PrimitiveType::Short) => {
-                Value::Long(LongValue(i64::from(self) + i64::from(other)))
+            (Value::Long(LongValue(s)), Value::Short(ShortValue(o))) => {
+                Value::Long(LongValue(*s + *o as i64))
             }
-            (PrimitiveType::Long, PrimitiveType::Int) => {
-                Value::Long(LongValue(i64::from(self) + i64::from(other)))
+            (Value::Long(LongValue(s)), Value::Int(IntValue(o))) => {
+                Value::Long(LongValue(*s + *o as i64))
             }
-            (PrimitiveType::Long, PrimitiveType::Long) => {
-                Value::Long(LongValue(i64::from(self) + i64::from(other)))
+            (Value::Long(LongValue(s)), Value::Long(LongValue(o))) => {
+                Value::Long(LongValue(*s + *o))
             }
             _ => unimplemented!(),
         }
     }
     fn minus(&self, other: &Value) -> Value {
-        assert!(!self.exact_type().array);
-        assert!(!other.exact_type().array);
-        match (self.exact_type().primitive, other.exact_type().primitive) {
-            (PrimitiveType::Byte, PrimitiveType::Byte) => {
-                Value::Byte(ByteValue(i8::from(self) - i8::from(other)))
+        match (self, other) {
+            (Value::Byte(ByteValue(s)), Value::Byte(ByteValue(o))) => {
+                Value::Byte(ByteValue(*s - *o))
             }
-            (PrimitiveType::Byte, PrimitiveType::Short) => {
-                Value::Short(ShortValue(i16::from(self) - i16::from(other)))
+            (Value::Byte(ByteValue(s)), Value::Short(ShortValue(o))) => {
+                Value::Short(ShortValue(*s as i16 - *o))
             }
-            (PrimitiveType::Byte, PrimitiveType::Int) => {
-                Value::Int(IntValue(i32::from(self) - i32::from(other)))
+            (Value::Byte(ByteValue(s)), Value::Int(IntValue(o))) => {
+                Value::Int(IntValue(*s as i32 - *o))
             }
-            (PrimitiveType::Byte, PrimitiveType::Long) => {
-                Value::Long(LongValue(i64::from(self) - i64::from(other)))
+            (Value::Byte(ByteValue(s)), Value::Long(LongValue(o))) => {
+                Value::Long(LongValue(*s as i64 - *o))
             }
-            (PrimitiveType::Short, PrimitiveType::Byte) => {
-                Value::Short(ShortValue(i16::from(self) - i16::from(other)))
+            (Value::Short(ShortValue(s)), Value::Byte(ByteValue(o))) => {
+                Value::Short(ShortValue(*s - *o as i16))
             }
-            (PrimitiveType::Short, PrimitiveType::Short) => {
-                Value::Short(ShortValue(i16::from(self) - i16::from(other)))
+            (Value::Short(ShortValue(s)), Value::Short(ShortValue(o))) => {
+                Value::Short(ShortValue(*s - *o))
             }
-            (PrimitiveType::Short, PrimitiveType::Int) => {
-                Value::Int(IntValue(i32::from(self) - i32::from(other)))
+            (Value::Short(ShortValue(s)), Value::Int(IntValue(o))) => {
+                Value::Int(IntValue(*s as i32 - *o))
             }
-            (PrimitiveType::Short, PrimitiveType::Long) => {
-                Value::Long(LongValue(i64::from(self) - i64::from(other)))
+            (Value::Short(ShortValue(s)), Value::Long(LongValue(o))) => {
+                Value::Long(LongValue(*s as i64 - *o))
             }
-            (PrimitiveType::Int, PrimitiveType::Byte) => {
-                Value::Int(IntValue(i32::from(self) - i32::from(other)))
+            (Value::Int(IntValue(s)), Value::Byte(ByteValue(o))) => {
+                Value::Int(IntValue(*s - *o as i32))
             }
-            (PrimitiveType::Int, PrimitiveType::Short) => {
-                Value::Int(IntValue(i32::from(self) - i32::from(other)))
+            (Value::Int(IntValue(s)), Value::Short(ShortValue(o))) => {
+                Value::Int(IntValue(*s - *o as i32))
             }
-            (PrimitiveType::Int, PrimitiveType::Int) => {
-                Value::Int(IntValue(i32::from(self) - i32::from(other)))
+            (Value::Int(IntValue(s)), Value::Int(IntValue(o))) => {
+                Value::Int(IntValue(*s - *o))
             }
-            (PrimitiveType::Int, PrimitiveType::Long) => {
-                Value::Long(LongValue(i64::from(self) - i64::from(other)))
+            (Value::Int(IntValue(s)), Value::Long(LongValue(o))) => {
+                Value::Long(LongValue(*s as i64 - *o))
             }
-            (PrimitiveType::Long, PrimitiveType::Byte) => {
-                Value::Long(LongValue(i64::from(self) - i64::from(other)))
+            (Value::Long(LongValue(s)), Value::Byte(ByteValue(o))) => {
+                Value::Long(LongValue(*s - *o as i64))
             }
-            (PrimitiveType::Long, PrimitiveType::Short) => {
-                Value::Long(LongValue(i64::from(self) - i64::from(other)))
+            (Value::Long(LongValue(s)), Value::Short(ShortValue(o))) => {
+                Value::Long(LongValue(*s - *o as i64))
             }
-            (PrimitiveType::Long, PrimitiveType::Int) => {
-                Value::Long(LongValue(i64::from(self) - i64::from(other)))
+            (Value::Long(LongValue(s)), Value::Int(IntValue(o))) => {
+                Value::Long(LongValue(*s - *o as i64))
             }
-            (PrimitiveType::Long, PrimitiveType::Long) => {
-                Value::Long(LongValue(i64::from(self) - i64::from(other)))
+            (Value::Long(LongValue(s)), Value::Long(LongValue(o))) => {
+                Value::Long(LongValue(*s - *o))
             }
             _ => unimplemented!(),
         }
     }
     fn modulus(&self, other: &Value) -> Value {
-        assert!(!self.exact_type().array);
-        assert!(!other.exact_type().array);
-        match (self.exact_type().primitive, other.exact_type().primitive) {
-            (PrimitiveType::Byte, PrimitiveType::Byte) => {
-                Value::Byte(ByteValue(i8::from(self) % i8::from(other)))
+        match (self, other) {
+            (Value::Byte(ByteValue(s)), Value::Byte(ByteValue(o))) => {
+                Value::Byte(ByteValue(*s % *o))
             }
-            (PrimitiveType::Byte, PrimitiveType::Short) => {
-                Value::Short(ShortValue(i16::from(self) % i16::from(other)))
+            (Value::Byte(ByteValue(s)), Value::Short(ShortValue(o))) => {
+                Value::Short(ShortValue(*s as i16 % *o))
             }
-            (PrimitiveType::Byte, PrimitiveType::Int) => {
-                Value::Int(IntValue(i32::from(self) % i32::from(other)))
+            (Value::Byte(ByteValue(s)), Value::Int(IntValue(o))) => {
+                Value::Int(IntValue(*s as i32 % *o))
             }
-            (PrimitiveType::Byte, PrimitiveType::Long) => {
-                Value::Long(LongValue(i64::from(self) % i64::from(other)))
+            (Value::Byte(ByteValue(s)), Value::Long(LongValue(o))) => {
+                Value::Long(LongValue(*s as i64 % *o))
             }
-            (PrimitiveType::Short, PrimitiveType::Byte) => {
-                Value::Short(ShortValue(i16::from(self) % i16::from(other)))
+            (Value::Short(ShortValue(s)), Value::Byte(ByteValue(o))) => {
+                Value::Short(ShortValue(*s % *o as i16))
             }
-            (PrimitiveType::Short, PrimitiveType::Short) => {
-                Value::Short(ShortValue(i16::from(self) % i16::from(other)))
+            (Value::Short(ShortValue(s)), Value::Short(ShortValue(o))) => {
+                Value::Short(ShortValue(*s % *o))
             }
-            (PrimitiveType::Short, PrimitiveType::Int) => {
-                Value::Int(IntValue(i32::from(self) % i32::from(other)))
+            (Value::Short(ShortValue(s)), Value::Int(IntValue(o))) => {
+                Value::Int(IntValue(*s as i32 % *o))
             }
-            (PrimitiveType::Short, PrimitiveType::Long) => {
-                Value::Long(LongValue(i64::from(self) % i64::from(other)))
+            (Value::Short(ShortValue(s)), Value::Long(LongValue(o))) => {
+                Value::Long(LongValue(*s as i64 % *o))
             }
-            (PrimitiveType::Int, PrimitiveType::Byte) => {
-                Value::Int(IntValue(i32::from(self) % i32::from(other)))
+            (Value::Int(IntValue(s)), Value::Byte(ByteValue(o))) => {
+                Value::Int(IntValue(*s % *o as i32))
             }
-            (PrimitiveType::Int, PrimitiveType::Short) => {
-                Value::Int(IntValue(i32::from(self) % i32::from(other)))
+            (Value::Int(IntValue(s)), Value::Short(ShortValue(o))) => {
+                Value::Int(IntValue(*s % *o as i32))
             }
-            (PrimitiveType::Int, PrimitiveType::Int) => {
-                Value::Int(IntValue(i32::from(self) % i32::from(other)))
+            (Value::Int(IntValue(s)), Value::Int(IntValue(o))) => {
+                Value::Int(IntValue(*s % *o))
             }
-            (PrimitiveType::Int, PrimitiveType::Long) => {
-                Value::Long(LongValue(i64::from(self) % i64::from(other)))
+            (Value::Int(IntValue(s)), Value::Long(LongValue(o))) => {
+                Value::Long(LongValue(*s as i64 % *o))
             }
-            (PrimitiveType::Long, PrimitiveType::Byte) => {
-                Value::Long(LongValue(i64::from(self) % i64::from(other)))
+            (Value::Long(LongValue(s)), Value::Byte(ByteValue(o))) => {
+                Value::Long(LongValue(*s % *o as i64))
             }
-            (PrimitiveType::Long, PrimitiveType::Short) => {
-                Value::Long(LongValue(i64::from(self) % i64::from(other)))
+            (Value::Long(LongValue(s)), Value::Short(ShortValue(o))) => {
+                Value::Long(LongValue(*s % *o as i64))
             }
-            (PrimitiveType::Long, PrimitiveType::Int) => {
-                Value::Long(LongValue(i64::from(self) % i64::from(other)))
+            (Value::Long(LongValue(s)), Value::Int(IntValue(o))) => {
+                Value::Long(LongValue(*s % *o as i64))
             }
-            (PrimitiveType::Long, PrimitiveType::Long) => {
-                Value::Long(LongValue(i64::from(self) % i64::from(other)))
+            (Value::Long(LongValue(s)), Value::Long(LongValue(o))) => {
+                Value::Long(LongValue(*s % *o))
             }
             _ => unimplemented!(),
         }
     }
     fn eq(&self, other: &Value) -> Value {
-        assert!(!self.exact_type().array);
-        assert!(!other.exact_type().array);
-        match (self.exact_type().primitive, other.exact_type().primitive) {
-            (PrimitiveType::Byte, PrimitiveType::Byte) => {
-                Value::Boolean(BooleanValue(i8::from(self) == i8::from(other)))
+        match (self, other) {
+            (Value::Byte(ByteValue(s)), Value::Byte(ByteValue(o))) => {
+                Value::Boolean(BooleanValue(*s == *o))
             }
-            (PrimitiveType::Byte, PrimitiveType::Short) => {
-                Value::Boolean(BooleanValue(i16::from(self) == i16::from(other)))
+            (Value::Byte(ByteValue(s)), Value::Short(ShortValue(o))) => {
+                Value::Boolean(BooleanValue(*s as i16 == *o))
             }
-            (PrimitiveType::Byte, PrimitiveType::Int) => {
-                Value::Boolean(BooleanValue(i32::from(self) == i32::from(other)))
+            (Value::Byte(ByteValue(s)), Value::Int(IntValue(o))) => {
+                Value::Boolean(BooleanValue(*s as i32 == *o))
             }
-            (PrimitiveType::Byte, PrimitiveType::Long) => {
-                Value::Boolean(BooleanValue(i64::from(self) == i64::from(other)))
+            (Value::Byte(ByteValue(s)), Value::Long(LongValue(o))) => {
+                Value::Boolean(BooleanValue(*s as i64 == *o))
             }
-            (PrimitiveType::Short, PrimitiveType::Byte) => {
-                Value::Boolean(BooleanValue(i16::from(self) == i16::from(other)))
+            (Value::Short(ShortValue(s)), Value::Byte(ByteValue(o))) => {
+                Value::Boolean(BooleanValue(*s == *o as i16))
             }
-            (PrimitiveType::Short, PrimitiveType::Short) => {
-                Value::Boolean(BooleanValue(i16::from(self) == i16::from(other)))
+            (Value::Short(ShortValue(s)), Value::Short(ShortValue(o))) => {
+                Value::Boolean(BooleanValue(*s == *o))
             }
-            (PrimitiveType::Short, PrimitiveType::Int) => {
-                Value::Boolean(BooleanValue(i32::from(self) == i32::from(other)))
+            (Value::Short(ShortValue(s)), Value::Int(IntValue(o))) => {
+                Value::Boolean(BooleanValue(*s as i32 == *o))
             }
-            (PrimitiveType::Short, PrimitiveType::Long) => {
-                Value::Boolean(BooleanValue(i64::from(self) == i64::from(other)))
+            (Value::Short(ShortValue(s)), Value::Long(LongValue(o))) => {
+                Value::Boolean(BooleanValue(*s as i64 == *o))
             }
-            (PrimitiveType::Int, PrimitiveType::Byte) => {
-                Value::Boolean(BooleanValue(i32::from(self) == i32::from(other)))
+            (Value::Int(IntValue(s)), Value::Byte(ByteValue(o))) => {
+                Value::Boolean(BooleanValue(*s == *o as i32))
             }
-            (PrimitiveType::Int, PrimitiveType::Short) => {
-                Value::Boolean(BooleanValue(i32::from(self) == i32::from(other)))
+            (Value::Int(IntValue(s)), Value::Short(ShortValue(o))) => {
+                Value::Boolean(BooleanValue(*s == *o as i32))
             }
-            (PrimitiveType::Int, PrimitiveType::Int) => {
-                Value::Boolean(BooleanValue(i32::from(self) == i32::from(other)))
+            (Value::Int(IntValue(s)), Value::Int(IntValue(o))) => {
+                Value::Boolean(BooleanValue(*s == *o))
             }
-            (PrimitiveType::Int, PrimitiveType::Long) => {
-                Value::Boolean(BooleanValue(i64::from(self) == i64::from(other)))
+            (Value::Int(IntValue(s)), Value::Long(LongValue(o))) => {
+                Value::Boolean(BooleanValue(*s as i64 == *o))
             }
-            (PrimitiveType::Long, PrimitiveType::Byte) => {
-                Value::Boolean(BooleanValue(i64::from(self) == i64::from(other)))
+            (Value::Long(LongValue(s)), Value::Byte(ByteValue(o))) => {
+                Value::Boolean(BooleanValue(*s == *o as i64))
             }
-            (PrimitiveType::Long, PrimitiveType::Short) => {
-                Value::Boolean(BooleanValue(i64::from(self) == i64::from(other)))
+            (Value::Long(LongValue(s)), Value::Short(ShortValue(o))) => {
+                Value::Boolean(BooleanValue(*s == *o as i64))
             }
-            (PrimitiveType::Long, PrimitiveType::Int) => {
-                Value::Boolean(BooleanValue(i64::from(self) == i64::from(other)))
+            (Value::Long(LongValue(s)), Value::Int(IntValue(o))) => {
+                Value::Boolean(BooleanValue(*s == *o as i64))
             }
-            (PrimitiveType::Long, PrimitiveType::Long) => {
-                Value::Boolean(BooleanValue(i64::from(self) == i64::from(other)))
+            (Value::Long(LongValue(s)), Value::Long(LongValue(o))) => {
+                Value::Boolean(BooleanValue(*s == *o))
+            }
+            (Value::Message(MessageValue(s)), Value::Message(MessageValue(o))) => {
+                Value::Boolean(BooleanValue(*s == *o))
             }
             _ => unimplemented!(),
         }
     }
     fn neq(&self, other: &Value) -> Value {
-        assert!(!self.exact_type().array);
-        assert!(!other.exact_type().array);
-        match (self.exact_type().primitive, other.exact_type().primitive) {
-            (PrimitiveType::Byte, PrimitiveType::Byte) => {
-                Value::Boolean(BooleanValue(i8::from(self) != i8::from(other)))
+        match (self, other) {
+            (Value::Byte(ByteValue(s)), Value::Byte(ByteValue(o))) => {
+                Value::Boolean(BooleanValue(*s != *o))
             }
-            (PrimitiveType::Byte, PrimitiveType::Short) => {
-                Value::Boolean(BooleanValue(i16::from(self) != i16::from(other)))
+            (Value::Byte(ByteValue(s)), Value::Short(ShortValue(o))) => {
+                Value::Boolean(BooleanValue(*s as i16 != *o))
             }
-            (PrimitiveType::Byte, PrimitiveType::Int) => {
-                Value::Boolean(BooleanValue(i32::from(self) != i32::from(other)))
+            (Value::Byte(ByteValue(s)), Value::Int(IntValue(o))) => {
+                Value::Boolean(BooleanValue(*s as i32 != *o))
             }
-            (PrimitiveType::Byte, PrimitiveType::Long) => {
-                Value::Boolean(BooleanValue(i64::from(self) != i64::from(other)))
+            (Value::Byte(ByteValue(s)), Value::Long(LongValue(o))) => {
+                Value::Boolean(BooleanValue(*s as i64 != *o))
             }
-            (PrimitiveType::Short, PrimitiveType::Byte) => {
-                Value::Boolean(BooleanValue(i16::from(self) != i16::from(other)))
+            (Value::Short(ShortValue(s)), Value::Byte(ByteValue(o))) => {
+                Value::Boolean(BooleanValue(*s != *o as i16))
             }
-            (PrimitiveType::Short, PrimitiveType::Short) => {
-                Value::Boolean(BooleanValue(i16::from(self) != i16::from(other)))
+            (Value::Short(ShortValue(s)), Value::Short(ShortValue(o))) => {
+                Value::Boolean(BooleanValue(*s != *o))
             }
-            (PrimitiveType::Short, PrimitiveType::Int) => {
-                Value::Boolean(BooleanValue(i32::from(self) != i32::from(other)))
+            (Value::Short(ShortValue(s)), Value::Int(IntValue(o))) => {
+                Value::Boolean(BooleanValue(*s as i32 != *o))
             }
-            (PrimitiveType::Short, PrimitiveType::Long) => {
-                Value::Boolean(BooleanValue(i64::from(self) != i64::from(other)))
+            (Value::Short(ShortValue(s)), Value::Long(LongValue(o))) => {
+                Value::Boolean(BooleanValue(*s as i64 != *o))
             }
-            (PrimitiveType::Int, PrimitiveType::Byte) => {
-                Value::Boolean(BooleanValue(i32::from(self) != i32::from(other)))
+            (Value::Int(IntValue(s)), Value::Byte(ByteValue(o))) => {
+                Value::Boolean(BooleanValue(*s != *o as i32))
             }
-            (PrimitiveType::Int, PrimitiveType::Short) => {
-                Value::Boolean(BooleanValue(i32::from(self) != i32::from(other)))
+            (Value::Int(IntValue(s)), Value::Short(ShortValue(o))) => {
+                Value::Boolean(BooleanValue(*s != *o as i32))
             }
-            (PrimitiveType::Int, PrimitiveType::Int) => {
-                Value::Boolean(BooleanValue(i32::from(self) != i32::from(other)))
+            (Value::Int(IntValue(s)), Value::Int(IntValue(o))) => {
+                Value::Boolean(BooleanValue(*s != *o))
             }
-            (PrimitiveType::Int, PrimitiveType::Long) => {
-                Value::Boolean(BooleanValue(i64::from(self) != i64::from(other)))
+            (Value::Int(IntValue(s)), Value::Long(LongValue(o))) => {
+                Value::Boolean(BooleanValue(*s as i64 != *o))
             }
-            (PrimitiveType::Long, PrimitiveType::Byte) => {
-                Value::Boolean(BooleanValue(i64::from(self) != i64::from(other)))
+            (Value::Long(LongValue(s)), Value::Byte(ByteValue(o))) => {
+                Value::Boolean(BooleanValue(*s != *o as i64))
             }
-            (PrimitiveType::Long, PrimitiveType::Short) => {
-                Value::Boolean(BooleanValue(i64::from(self) != i64::from(other)))
+            (Value::Long(LongValue(s)), Value::Short(ShortValue(o))) => {
+                Value::Boolean(BooleanValue(*s != *o as i64))
             }
-            (PrimitiveType::Long, PrimitiveType::Int) => {
-                Value::Boolean(BooleanValue(i64::from(self) != i64::from(other)))
+            (Value::Long(LongValue(s)), Value::Int(IntValue(o))) => {
+                Value::Boolean(BooleanValue(*s != *o as i64))
             }
-            (PrimitiveType::Long, PrimitiveType::Long) => {
-                Value::Boolean(BooleanValue(i64::from(self) != i64::from(other)))
+            (Value::Long(LongValue(s)), Value::Long(LongValue(o))) => {
+                Value::Boolean(BooleanValue(*s != *o))
+            }
+            (Value::Message(MessageValue(s)), Value::Message(MessageValue(o))) => {
+                Value::Boolean(BooleanValue(*s != *o))
             }
             _ => unimplemented!(),
         }
     }
     fn lt(&self, other: &Value) -> Value {
+        // TODO: match value directly (as done above)
         assert!(!self.exact_type().array);
         assert!(!other.exact_type().array);
         match (self.exact_type().primitive, other.exact_type().primitive) {
@@ -1519,7 +1515,27 @@ impl Store {
             }
             Expression::Binary(expr) => {
                 let left = self.eval(h, ctx, expr.left)?;
-                let right = self.eval(h, ctx, expr.right)?;
+                let right;
+                match expr.operation {
+                    BinaryOperator::LogicalAnd => {
+                        if left.as_boolean().0 == false {
+                            return Ok(left)
+                        }
+                        right = self.eval(h, ctx, expr.right)?;
+                        right.as_boolean(); // panics if not a boolean
+                        return Ok(right);
+                    }
+                    BinaryOperator::LogicalOr => {
+                        if left.as_boolean().0 == true {
+                            return Ok(left)
+                        }
+                        right = self.eval(h, ctx, expr.right)?;
+                        right.as_boolean(); // panics if not a boolean
+                        return Ok(right);
+                    }
+                    _ => {}
+                }
+                right = self.eval(h, ctx, expr.right)?;
                 match expr.operation {
                     BinaryOperator::Equality => Ok(left.eq(&right)),
                     BinaryOperator::Inequality => Ok(left.neq(&right)),
@@ -1528,7 +1544,7 @@ impl Store {
                     BinaryOperator::GreaterThan => Ok(left.gt(&right)),
                     BinaryOperator::GreaterThanEqual => Ok(left.gte(&right)),
                     BinaryOperator::Remainder => Ok(left.modulus(&right)),
-                    _ => unimplemented!(),
+                    _ => unimplemented!("{:?}", expr.operation),
                 }
             }
             Expression::Unary(expr) => {

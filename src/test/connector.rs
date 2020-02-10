@@ -672,7 +672,7 @@ fn fifo_1_e() {
                 // get
                 assert_eq!(Ok(()), x.get(1));
                 assert_eq!(Ok(0), x.sync(timeout));
-                assert_eq!(Ok(&[] as &[u8]), x.read_gotten(1));
+                assert_eq!(Ok(b"message~" as &[u8]), x.read_gotten(1));
             }
         },
     ]));

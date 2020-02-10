@@ -1,0 +1,8 @@
+#version 100
+
+composite main() {}
+
+int test() {
+	msg x = create(0);
+	return x.length == 0 && (x != null || (x[0] = 1) == 1);
+}
