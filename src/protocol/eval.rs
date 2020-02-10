@@ -1375,7 +1375,7 @@ impl Store {
         match &h[rexpr] {
             Expression::Variable(var) => {
                 let var = var.declaration.unwrap();
-                let value = self.map.get(&var).unwrap();
+                let value = self.map.get(&var).expect(&format!("Uninitialized variable {:?}", h[h[var].identifier()]));
                 Ok(value.clone())
             }
             _ => unimplemented!("{:?}", h[rexpr]),
@@ -1485,7 +1485,7 @@ pub enum EvalContinuation {
     Terminal,
     SyncBlockStart,
     SyncBlockEnd,
-    NewComponent(Vec<Value>),
+    NewComponent(DeclarationId, Vec<Value>),
     BlockFires(Value),
     BlockGet(Value),
     Put(Value, Value),
@@ -1533,7 +1533,12 @@ impl Prompt {
                             // Update store
                             self.store.initialize(h, stmt.variable.upcast(), value);
                         }
-                        LocalStatement::Channel(stmt) => unimplemented!(),
+                        LocalStatement::Channel(stmt) => {
+                            let [from, to] = ctx.new_channel();
+                            // Store the values in the declared variables
+                            self.store.initialize(h, stmt.from.upcast(), from);
+                            self.store.initialize(h, stmt.to.upcast(), to);
+                        },
                     }
                     // Continue to next statement
                     self.position = stmt.next();
@@ -1591,6 +1596,28 @@ impl Prompt {
                     self.position = stmt.next;
                     Err(EvalContinuation::SyncBlockEnd)
                 }
+                Statement::Break(stmt) => {
+                    // Continue to end of while
+                    self.position = stmt.target.map(EndWhileStatementId::upcast);
+                    Err(EvalContinuation::Stepping)
+                }
+                Statement::Continue(stmt) => {
+                    // Continue to beginning of while
+                    self.position = stmt.target.map(WhileStatementId::upcast);
+                    Err(EvalContinuation::Stepping)
+                }
+                Statement::Assert(stmt) => {
+                    // Evaluate expression
+                    let value = self.store.eval(h, ctx, stmt.expression)?;
+                    if value.as_boolean().0 {
+                        // Continue to next statement
+                        self.position = stmt.next;
+                        Err(EvalContinuation::Stepping)
+                    } else {
+                        // Assertion failed: inconsistent
+                        Err(EvalContinuation::Inconsistent)
+                    }
+                }
                 Statement::Return(stmt) => {
                     // Evaluate expression
                     let value = self.store.eval(h, ctx, stmt.expression)?;
@@ -1602,7 +1629,16 @@ impl Prompt {
                     self.position = stmt.target.map(|x| x.upcast());
                     Err(EvalContinuation::Stepping)
                 }
-                Statement::New(stmt) => todo!(),
+                Statement::New(stmt) => {
+                    let expr = &h[stmt.expression];
+                    let mut args = Vec::new();
+                    for &arg in expr.arguments.iter() {
+                        let value = self.store.eval(h, ctx, arg)?;
+                        args.push(value);
+                    }
+                    self.position = stmt.next;
+                    Err(EvalContinuation::NewComponent(expr.declaration.unwrap(), args))
+                }
                 Statement::Put(stmt) => {
                     // Evaluate port and message
                     let port = self.store.eval(h, ctx, stmt.port)?;
@@ -1619,7 +1655,6 @@ impl Prompt {
                     self.position = stmt.next;
                     Err(EvalContinuation::Stepping)
                 }
-                _ => unimplemented!("{:?}", stmt),
             }
         } else {
             Err(EvalContinuation::Terminal)
@@ -1640,7 +1675,7 @@ impl Prompt {
                     // Functions never encounter any blocking behavior
                     EvalContinuation::SyncBlockStart => unreachable!(),
                     EvalContinuation::SyncBlockEnd => unreachable!(),
-                    EvalContinuation::NewComponent(args) => unreachable!(),
+                    EvalContinuation::NewComponent(_, _) => unreachable!(),
                     EvalContinuation::BlockFires(val) => unreachable!(),
                     EvalContinuation::BlockGet(val) => unreachable!(),
                     EvalContinuation::Put(port, msg) => unreachable!(),
@@ -1669,8 +1704,7 @@ mod tests {
         let mut source = InputSource::from_file(&path).unwrap();
         let mut parser = Parser::new(&mut source);
         let pd = parser.parse(&mut heap).unwrap();
-        let test = heap.get_external_identifier(b"test");
-        let def = heap[pd].get_definition(&heap, test.upcast()).unwrap();
+        let def = heap[pd].get_definition_ident(&heap, b"test").unwrap();
         let fun = heap[def].as_function().this;
         let args = Vec::new();
         let result = Prompt::compute_function(&heap, fun, &args).unwrap();

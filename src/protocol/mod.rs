@@ -121,8 +121,14 @@ impl ComponentState for ComponentStateImpl {
                     EvalContinuation::SyncBlockStart => return MonoBlocker::SyncBlockStart,
                     // Not possible to end sync block if never entered one
                     EvalContinuation::SyncBlockEnd => unreachable!(),
-                    EvalContinuation::NewComponent(args) => {
-                        todo!();
+                    EvalContinuation::NewComponent(decl, args) => {
+                        // Look up definition (TODO for now, assume it is a definition)
+                        let h = &pd.heap;
+                        let def = h[decl].as_defined().definition;
+                        println!("Create component: {}",  String::from_utf8_lossy(h[h[def].identifier()].ident()));
+                        let init_state = ComponentStateImpl { prompt: Prompt::new(h, def, &args) };
+                        context.new_component(&args, init_state);
+                        // Continue stepping
                         continue;
                     }
                     // Outside synchronous blocks, no fires/get/put happens
@@ -154,7 +160,7 @@ impl ComponentState for ComponentStateImpl {
                     EvalContinuation::SyncBlockStart => unreachable!(),
                     EvalContinuation::SyncBlockEnd => return PolyBlocker::SyncBlockEnd,
                     // Not possible to create component in sync block
-                    EvalContinuation::NewComponent(args) => unreachable!(),
+                    EvalContinuation::NewComponent(_, _) => unreachable!(),
                     EvalContinuation::BlockFires(port) => match port {
                         Value::Output(OutputValue(key)) => {
                             return PolyBlocker::CouldntCheckFiring(key);
@@ -214,20 +220,42 @@ impl EvalContext<'_> {
         match self {
             EvalContext::None => unreachable!(),
             EvalContext::Mono(context) => todo!(),
-            EvalContext::Poly(context) => unreachable!(),
+            EvalContext::Poly(_) => unreachable!(),
         }
     }
-    fn channel(&mut self) -> (Value, Value) {
+    fn new_component(&mut self, args: &[Value], init_state: ComponentStateImpl) -> () {
         match self {
             EvalContext::None => unreachable!(),
-            EvalContext::Mono(context) => unreachable!(),
-            EvalContext::Poly(context) => todo!(),
+            EvalContext::Mono(context) => {
+                let mut moved_keys = HashSet::new();
+                for arg in args.iter() {
+                    match arg {
+                        Value::Output(OutputValue(key)) => { moved_keys.insert(*key); }
+                        Value::Input(InputValue(key)) => { moved_keys.insert(*key); }
+                        _ => {}
+                    }
+                }
+                context.new_component(moved_keys, init_state)
+            }
+            EvalContext::Poly(_) => unreachable!(),
+        }
+    }
+    fn new_channel(&mut self) -> [Value; 2] {
+        match self {
+            EvalContext::None => unreachable!(),
+            EvalContext::Mono(context) => {
+                let [from, to] = context.new_channel();
+                let from = Value::Output(OutputValue(from));
+                let to = Value::Input(InputValue(to));
+                return [from, to];
+            }
+            EvalContext::Poly(_) => unreachable!()
         }
     }
     fn fires(&mut self, port: Value) -> Option<Value> {
         match self {
             EvalContext::None => unreachable!(),
-            EvalContext::Mono(context) => unreachable!(),
+            EvalContext::Mono(_) => unreachable!(),
             EvalContext::Poly(context) => match port {
                 Value::Output(OutputValue(key)) => context.is_firing(key).map(Value::from),
                 Value::Input(InputValue(key)) => context.is_firing(key).map(Value::from),
@@ -238,7 +266,7 @@ impl EvalContext<'_> {
     fn get(&mut self, port: Value) -> Option<Value> {
         match self {
             EvalContext::None => unreachable!(),
-            EvalContext::Mono(context) => unreachable!(),
+            EvalContext::Mono(_) => unreachable!(),
             EvalContext::Poly(context) => match port {
                 Value::Output(OutputValue(key)) => {
                     context.read_msg(key).map(Value::receive_message)

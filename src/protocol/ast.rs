@@ -1353,7 +1353,7 @@ pub struct SourceIdentifier {
 }
 
 impl SourceIdentifier {
-    fn ident(&self) -> &[u8] {
+    pub fn ident(&self) -> &[u8] {
         &self.value
     }
 }
@@ -1827,6 +1827,12 @@ impl Declaration {
     pub fn is_function(&self) -> bool {
         self.signature().is_function()
     }
+    pub fn as_defined(&self) -> &DefinedDeclaration {
+        match self {
+            Declaration::Defined(result) => result,
+            _ => panic!("Unable to cast `Declaration` to `DefinedDeclaration`"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -2178,6 +2184,7 @@ impl BlockStatement {
         }
     }
     pub fn first(&self) -> StatementId {
+        // It is an invariant (guaranteed by the lexer) that block statements have at least one stmt
         *self.statements.first().unwrap()
     }
 }

@@ -524,10 +524,21 @@ fn composite_chain() {
     /*
     Alice -->sync-->sync-->A|P-->sync-->sync--> Bob
     */
+    static PDL : &[u8] =
+b"primitive sync(in i, out o) {
+    while(true) synchronous {
+        if (fires(i)) put(o, get(i));
+    }
+}
+composite sync_2(in i, out o) {
+    channel x -> y;
+    new sync(i, x);
+    new sync(y, o);
+}";
     let timeout = Duration::from_millis(1_500);
     let addrs = [next_addr(), next_addr()];
     const N: usize = 1;
-    static MSG: &[u8] = b"Hippity Hoppity";
+    static MSG: &[u8] = b"SSS";
     assert!(run_connector_set(&[
         //
         &|x| {
@@ -543,7 +554,7 @@ fn composite_chain() {
         },
         &|x| {
             // Bob
-            x.configure(PDL, b"sync_2").unwrap();
+            x.configure(PDL, b"sync").unwrap();
             x.bind_port(0, Passive(addrs[0])).unwrap();
             x.bind_port(1, Native).unwrap();
             x.connect(timeout).unwrap();

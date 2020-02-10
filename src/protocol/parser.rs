@@ -1082,7 +1082,7 @@ impl LinkStatements {
 
 impl Visitor for LinkStatements {
     fn visit_statement(&mut self, h: &mut Heap, stmt: StatementId) -> VisitorResult {
-        if let Some(UniqueStatementId(prev)) = std::mem::replace(&mut self.prev, None) {
+        if let Some(UniqueStatementId(prev)) = self.prev.take() {
             h[prev].link_next(stmt);
         }
         recursive_statement(self, h, stmt)
@@ -1105,12 +1105,12 @@ impl Visitor for LinkStatements {
             h.alloc_end_if_statement(|this| EndIfStatement { this, position, next: None }).upcast();
         assert!(self.prev.is_none());
         self.visit_statement(h, h[stmt].true_body)?;
-        if let Some(UniqueStatementId(prev)) = std::mem::replace(&mut self.prev, None) {
+        if let Some(UniqueStatementId(prev)) = self.prev.take() {
             h[prev].link_next(pseudo);
         }
         assert!(self.prev.is_none());
         self.visit_statement(h, h[stmt].false_body)?;
-        if let Some(UniqueStatementId(prev)) = std::mem::replace(&mut self.prev, None) {
+        if let Some(UniqueStatementId(prev)) = self.prev.take() {
             h[prev].link_next(pseudo);
         }
         // Use the pseudo-statement as the statement where to update the next pointer
