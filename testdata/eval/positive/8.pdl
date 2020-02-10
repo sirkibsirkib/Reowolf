@@ -1,0 +1,12 @@
+#version 100
+
+composite main() {}
+
+int test() {
+	msg x = create(4);
+	x[0] = 1;
+	x[1] = 2;
+	x[2] = 3;
+	x[3] = 4;
+	return x.length;
+}

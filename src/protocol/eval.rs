@@ -93,7 +93,7 @@ impl Value {
         match index {
             Value::Byte(_) | Value::Short(_) | Value::Int(_) | Value::Long(_) => {
                 let index = i64::from(index);
-                if index < 0 || index > MESSAGE_MAX_LENGTH {
+                if index < 0 || index >= MESSAGE_MAX_LENGTH {
                     // It is inconsistent to update out of bounds
                     return None;
                 }
@@ -142,6 +142,82 @@ impl Value {
             (Value::ShortArray(_), Value::Short(_)) => todo!(),
             (Value::IntArray(_), Value::Int(_)) => todo!(),
             (Value::LongArray(_), Value::Long(_)) => todo!(),
+            _ => unreachable!(),
+        }
+    }
+    fn get(&self, index: &Value) -> Option<Value> {
+        // The index must be of integer type, and non-negative
+        let the_index: usize;
+        match index {
+            Value::Byte(_) | Value::Short(_) | Value::Int(_) | Value::Long(_) => {
+                let index = i64::from(index);
+                if index < 0 || index >= MESSAGE_MAX_LENGTH {
+                    // It is inconsistent to update out of bounds
+                    return None;
+                }
+                the_index = index.try_into().unwrap();
+            }
+            _ => unreachable!(),
+        }
+        // The subject must be either a message or an array
+        match self {
+            Value::Message(MessageValue(None)) => {
+                // It is inconsistent to read from the null message
+                None
+            }
+            Value::Message(MessageValue(Some(buffer))) => {
+                if let Some(slot) = buffer.get(the_index) {
+                    Some(Value::Short(ShortValue((*slot).try_into().unwrap())))
+                } else {
+                    // It is inconsistent to update out of bounds
+                    None
+                }
+            }
+            Value::InputArray(_) => todo!(),
+            Value::OutputArray(_) => todo!(),
+            Value::MessageArray(_) => todo!(),
+            Value::BooleanArray(_) => todo!(),
+            Value::ByteArray(_) => todo!(),
+            Value::ShortArray(_) => todo!(),
+            Value::IntArray(_) => todo!(),
+            Value::LongArray(_) => todo!(),
+            _ => unreachable!(),
+        }
+    }
+    fn length(&self) -> Option<Value> {
+        // The subject must be either a message or an array
+        match self {
+            Value::Message(MessageValue(None)) => {
+                // It is inconsistent to get length from the null message
+                None
+            }
+            Value::Message(MessageValue(Some(buffer))) => {
+                Some(Value::Int(IntValue((buffer.len()).try_into().unwrap())))
+            }
+            Value::InputArray(InputArrayValue(vec)) => {
+                Some(Value::Int(IntValue((vec.len()).try_into().unwrap())))
+            }
+            Value::OutputArray(OutputArrayValue(vec)) => {
+                Some(Value::Int(IntValue((vec.len()).try_into().unwrap())))
+            }
+            Value::MessageArray(MessageArrayValue(vec)) => {
+                Some(Value::Int(IntValue((vec.len()).try_into().unwrap())))
+            }
+            Value::BooleanArray(BooleanArrayValue(vec)) => {
+                Some(Value::Int(IntValue((vec.len()).try_into().unwrap())))
+            }
+            Value::ByteArray(ByteArrayValue(vec)) => {
+                Some(Value::Int(IntValue((vec.len()).try_into().unwrap())))
+            }
+            Value::ShortArray(ShortArrayValue(vec)) => {
+                Some(Value::Int(IntValue((vec.len()).try_into().unwrap())))
+            }
+            Value::IntArray(IntArrayValue(vec)) => {
+                Some(Value::Int(IntValue((vec.len()).try_into().unwrap())))
+            }
+            Value::LongArray(LongArrayValue(vec)) => {
+                Some(Value::Int(IntValue((vec.len()).try_into().unwrap())))
+            }
             _ => unreachable!(),
         }
     }
@@ -1371,12 +1447,44 @@ impl Store {
             _ => unimplemented!("{:?}", h[lexpr]),
         }
     }
-    fn get(&mut self, h: &Heap, rexpr: ExpressionId) -> EvalResult {
+    fn get(&mut self, h: &Heap, ctx: &mut EvalContext, rexpr: ExpressionId) -> EvalResult {
         match &h[rexpr] {
             Expression::Variable(var) => {
                 let var = var.declaration.unwrap();
                 let value = self.map.get(&var).expect(&format!("Uninitialized variable {:?}", h[h[var].identifier()]));
                 Ok(value.clone())
+            }
+            Expression::Indexing(indexing) => {
+                // Evaluate index expression, which must be some integral type
+                let index = self.eval(h, ctx, indexing.index)?;
+                // Reference to subject
+                let subject;
+                match &h[indexing.subject] {
+                    Expression::Variable(var) => {
+                        let var = var.declaration.unwrap();
+                        subject = self.map.get(&var).unwrap();
+                    }
+                    _ => unreachable!(),
+                }
+                match subject.get(&index) {
+                    Some(value) => Ok(value),
+                    None => Err(EvalContinuation::Inconsistent),
+                }
+            }
+            Expression::Select(selecting) => {
+                // Reference to subject
+                let subject;
+                match &h[selecting.subject] {
+                    Expression::Variable(var) => {
+                        let var = var.declaration.unwrap();
+                        subject = self.map.get(&var).unwrap();
+                    }
+                    _ => unreachable!(),
+                }
+                match subject.length() {
+                    Some(value) => Ok(value),
+                    None => Err(EvalContinuation::Inconsistent),
+                }
             }
             _ => unimplemented!("{:?}", h[rexpr]),
         }
@@ -1387,15 +1495,15 @@ impl Store {
                 let value = self.eval(h, ctx, expr.right)?;
                 match expr.operation {
                     AssignmentOperator::Set => {
-                        self.update(h, ctx, expr.left, value.clone());
+                        self.update(h, ctx, expr.left, value.clone())?;
                     }
                     AssignmentOperator::Added => {
-                        let old = self.get(h, expr.left)?;
-                        self.update(h, ctx, expr.left, old.plus(&value));
+                        let old = self.get(h, ctx, expr.left)?;
+                        self.update(h, ctx, expr.left, old.plus(&value))?;
                     }
                     AssignmentOperator::Subtracted => {
-                        let old = self.get(h, expr.left)?;
-                        self.update(h, ctx, expr.left, old.minus(&value));
+                        let old = self.get(h, ctx, expr.left)?;
+                        self.update(h, ctx, expr.left, old.minus(&value))?;
                     }
                     _ => unimplemented!("{:?}", expr),
                 }
@@ -1427,27 +1535,33 @@ impl Store {
                 let mut value = self.eval(h, ctx, expr.expression)?;
                 match expr.operation {
                     UnaryOperation::PostIncrement => {
-                        self.update(h, ctx, expr.expression, value.plus(&ONE));
+                        self.update(h, ctx, expr.expression, value.plus(&ONE))?;
                     }
                     UnaryOperation::PreIncrement => {
                         value = value.plus(&ONE);
-                        self.update(h, ctx, expr.expression, value.clone());
+                        self.update(h, ctx, expr.expression, value.clone())?;
                     }
                     UnaryOperation::PostDecrement => {
-                        self.update(h, ctx, expr.expression, value.minus(&ONE));
+                        self.update(h, ctx, expr.expression, value.minus(&ONE))?;
                     }
                     UnaryOperation::PreDecrement => {
                         value = value.minus(&ONE);
-                        self.update(h, ctx, expr.expression, value.clone());
+                        self.update(h, ctx, expr.expression, value.clone())?;
                     }
                     _ => unimplemented!(),
                 }
                 Ok(value)
             }
-            Expression::Indexing(expr) => self.get(h, expr.this.upcast()),
+            Expression::Indexing(expr) => self.get(h, ctx, expr.this.upcast()),
             Expression::Slicing(expr) => unimplemented!(),
-            Expression::Select(expr) => self.get(h, expr.this.upcast()),
-            Expression::Array(expr) => unimplemented!(),
+            Expression::Select(expr) => self.get(h, ctx, expr.this.upcast()),
+            Expression::Array(expr) => {
+                let mut elements = Vec::new();
+                for &elem in expr.elements.iter() {
+                    elements.push(self.eval(h, ctx, elem)?);
+                }
+                todo!()
+            },
             Expression::Constant(expr) => Ok(Value::from_constant(&expr.value)),
             Expression::Call(expr) => match expr.method {
                 Method::Create => {
@@ -1473,7 +1587,7 @@ impl Store {
                 }
                 Method::Symbolic(symbol) => unimplemented!(),
             },
-            Expression::Variable(expr) => self.get(h, expr.this.upcast()),
+            Expression::Variable(expr) => self.get(h, ctx, expr.this.upcast()),
         }
     }
 }

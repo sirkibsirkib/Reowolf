@@ -1626,14 +1626,11 @@ impl Visitor for IndexableExpressions {
         h: &mut Heap,
         expr: IndexingExpressionId,
     ) -> VisitorResult {
-        if self.indexable {
-            self.error(h[expr].position)
-        } else {
-            self.indexable = true;
-            self.visit_expression(h, h[expr].subject)?;
-            self.indexable = false;
-            self.visit_expression(h, h[expr].index)
-        }
+        let old = self.indexable;
+        self.indexable = false;
+        self.visit_expression(h, h[expr].subject)?;
+        self.indexable = old;
+        self.visit_expression(h, h[expr].index)
     }
     fn visit_slicing_expression(
         &mut self,

@@ -10,7 +10,6 @@ use crate::protocol::ast::*;
 use crate::protocol::eval::*;
 use crate::protocol::inputsource::*;
 use crate::protocol::parser::*;
-use std::hint::unreachable_unchecked;
 
 pub struct ProtocolDescriptionImpl {
     heap: Heap,
@@ -125,16 +124,15 @@ impl ComponentState for ComponentStateImpl {
                         // Look up definition (TODO for now, assume it is a definition)
                         let h = &pd.heap;
                         let def = h[decl].as_defined().definition;
-                        println!("Create component: {}",  String::from_utf8_lossy(h[h[def].identifier()].ident()));
                         let init_state = ComponentStateImpl { prompt: Prompt::new(h, def, &args) };
                         context.new_component(&args, init_state);
                         // Continue stepping
                         continue;
                     }
                     // Outside synchronous blocks, no fires/get/put happens
-                    EvalContinuation::BlockFires(val) => unreachable!(),
-                    EvalContinuation::BlockGet(val) => unreachable!(),
-                    EvalContinuation::Put(port, msg) => unreachable!(),
+                    EvalContinuation::BlockFires(_) => unreachable!(),
+                    EvalContinuation::BlockGet(_) => unreachable!(),
+                    EvalContinuation::Put(_, _) => unreachable!(),
                 },
             }
         }
