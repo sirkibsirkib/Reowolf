@@ -520,6 +520,8 @@ impl MonoContext for MonoPContext<'_> {
             info: EndpointInfo { polarity: Putter, channel_id },
             endpoint: b,
         });
+        self.ekeys.insert(kp);
+        self.ekeys.insert(kg);
         log!(
             &mut self.inner.logger,
             "!! MonoContext callback to new_channel. returning ekeys {:?}!",

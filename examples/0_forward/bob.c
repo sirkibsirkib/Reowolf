@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "../../reowolf.h"
+#include "../check.c"
 
 int main() {
 	
@@ -12,40 +13,20 @@ int main() {
 	
 	// BOB
 	Connector* c = connector_new();
-	if (connector_configure(c, pdl, "forward")) {
-		printf("CONFIG FAILED: %s\n", connector_error_peek());
-		return 1;
-	}
-	if (connector_bind_active(c, 0, "127.0.0.1:7000")) {
-		printf("BIND0 FAILED: %s\n", connector_error_peek());
-		return 1;
-	}
-	if (connector_bind_native(c, 1)) {
-		printf("BIND1 FAILED: %s\n", connector_error_peek());
-		return 1;
-	}
-	printf("connecting... \n");
-	if (connector_connect(c, 10000)) {
-		printf("CONNECT FAILED: %s\n", connector_error_peek());
-		return 1;
-	}
+	check("config ", connector_configure(c, pdl, "forward"));
+	check("bind 0 ", connector_bind_active(c, 0, "127.0.0.1:7000"));
+	check("bind 1 ", connector_bind_native(c, 1));
+	check("connect", connector_connect(c, 10000));
 	
 	int i;
 	for (i = 0; i < 3; i++) {
-		if (connector_get(c, 0)) {
-			printf("CONNECT GET: %s\n", connector_error_peek());
-			return 1;
-		}
-		if (connector_sync(c, 10000)) {
-			printf("SYNC FAILED: %s\n", connector_error_peek());
-			return 1;
-		}
+		check("get ", connector_get(c, 0));
+		check("sync", connector_sync(c, 10000));
+
 		int msg_len;
 		const unsigned char * msg;
-		if (connector_gotten(c, 0, &msg, &msg_len)) {
-			printf("READ FAILED: %s\n", connector_error_peek());
-			return 1;
-		}
+		check("read", connector_gotten(c, 0, &msg, &msg_len));
+
 		printf("received: `%s`\n", msg);
 	}
 	

@@ -19,6 +19,17 @@ primitive sync(in i, out o) {
         if (fires(i)) put(o, get(i));
     }
 }
+primitive fifo_1(in i, out o) {
+    msg holding = null;
+    while(true) synchronous {
+        if (holding == null && fires(i)) {
+            holding = get(i);
+        } else if (holding != null && fires(o)) {
+            put(o, holding);
+            holding = null;
+        }
+    }
+}
 primitive alternator_2(in i, out a, out b) {
     while(true) {
         synchronous { put(a, get(i)); }
@@ -46,13 +57,12 @@ primitive token_spout(out o) {
         put(o, create(0));
     }
 }
-primitive wait_10(out o) {
-    int i = 0;
-    while(i < 10) {
-        synchronous {}
-        i += 1;
-    }
+primitive wait_n(int to_wait, out o) {
+    while(to_wait > 0) synchronous() to_wait -= 1;
     synchronous { put(o, create(0)); }
+}
+composite wait_10(out o) {
+    new wait_n(10, o);
 }
 ";
 
@@ -367,6 +377,73 @@ fn getter_determines() {
             for _i in 0..N {
                 x.get(0).unwrap();
                 assert_eq!(Ok(0), x.sync(timeout));
+                assert_eq!(Ok(MSG), x.read_gotten(0));
+            }
+        },
+    ]));
+}
+
+#[test]
+fn fifo_2() {
+    // Test a deterministic system which
+    // alternates sending Sender's messages to A or B
+    /*                    /--|-->A
+    Sender -->alternator_2
+                          \--|-->B
+    */
+    let timeout = Duration::from_millis(1_500);
+    let addrs = [next_addr(), next_addr()];
+    const N: usize = 5;
+    static MSG: &[u8] = b"message";
+    assert!(run_connector_set(&[
+        //
+        &|x| {
+            // Sender
+            x.configure(PDL, b"alternator_2").unwrap();
+            x.bind_port(0, Native).unwrap();
+            x.bind_port(1, Passive(addrs[0])).unwrap();
+            x.bind_port(2, Passive(addrs[1])).unwrap();
+            x.connect(timeout).unwrap();
+
+            for _ in 0..N {
+                for _ in 0..2 {
+                    x.put(0, MSG.to_vec()).unwrap();
+                    assert_eq!(0, x.sync(timeout).unwrap());
+                }
+            }
+        },
+        &|x| {
+            // A
+            x.configure(PDL, b"sync").unwrap();
+            x.bind_port(0, Active(addrs[0])).unwrap();
+            x.bind_port(1, Native).unwrap();
+            x.connect(timeout).unwrap();
+            for _ in 0..N {
+                // get msg round
+                x.get(0).unwrap();
+                assert_eq!(Ok(0), x.sync(timeout)); // GET ONE
+                assert_eq!(Ok(MSG), x.read_gotten(0));
+
+                // silent round
+                assert_eq!(Ok(0), x.sync(timeout)); // MISS ONE
+                assert_eq!(Err(ReadGottenErr::DidNotGet), x.read_gotten(0));
+            }
+        },
+        &|x| {
+            // B
+            x.configure(PDL, b"sync").unwrap();
+            x.bind_port(0, Active(addrs[1])).unwrap();
+            x.bind_port(1, Native).unwrap();
+            x.connect(timeout).unwrap();
+
+            for _ in 0..N {
+                // silent round
+                assert_eq!(Ok(0), x.sync(timeout)); // MISS ONE
+                assert_eq!(Err(ReadGottenErr::DidNotGet), x.read_gotten(0));
+
+                // get msg round
+                x.get(0).unwrap();
+                assert_eq!(Ok(0), x.sync(timeout)); // GET ONE
                 assert_eq!(Ok(MSG), x.read_gotten(0));
             }
         },
