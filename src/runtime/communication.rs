@@ -323,8 +323,9 @@ impl Controller {
                 Msg::CommMsg(CommMsg { contents, round_index }) => {
                     log!(
                         &mut self.inner.logger,
-                        "recvd a round-appropriate CommMsg {:?}",
-                        &contents
+                        "recvd a round-appropriate CommMsg {:?} with key {:?}",
+                        &contents,
+                        received.recipient
                     );
                     assert_eq!(round_index, self.inner.round_index);
                     contents
@@ -365,6 +366,11 @@ impl Controller {
                     return self.end_round_with_decision(oracle);
                 }
                 CommMsgContents::SendPayload { payload_predicate, payload } => {
+                    assert_eq!(
+                        Getter,
+                        self.inner.endpoint_exts.get(received.recipient).unwrap().info.polarity
+                    );
+
                     // message for some actor. Feed it to the appropriate actor
                     // and then give them another chance to run.
                     let subtree_id = ekey_to_holder.get(&received.recipient);
@@ -512,16 +518,22 @@ impl MonoContext for MonoPContext<'_> {
     fn new_channel(&mut self) -> [Key; 2] {
         let [a, b] = Endpoint::new_memory_pair();
         let channel_id = self.inner.channel_id_stream.next();
-        let kp = self.inner.endpoint_exts.alloc(EndpointExt {
-            info: EndpointInfo { polarity: Putter, channel_id },
-            endpoint: a,
-        });
-        let kg = self.inner.endpoint_exts.alloc(EndpointExt {
-            info: EndpointInfo { polarity: Putter, channel_id },
-            endpoint: b,
-        });
-        self.ekeys.insert(kp);
-        self.ekeys.insert(kg);
+
+        let mut clos = |endpoint, polarity| {
+            let endpoint_ext =
+                EndpointExt { info: EndpointInfo { polarity, channel_id }, endpoint };
+            let ekey = self.inner.endpoint_exts.alloc(endpoint_ext);
+            let endpoint = &self.inner.endpoint_exts.get(ekey).unwrap().endpoint;
+            let token = Key::to_token(ekey);
+            self.inner
+                .messenger_state
+                .poll
+                .register(endpoint, token, Ready::readable(), PollOpt::edge())
+                .expect("AAGAGGGGG");
+            self.ekeys.insert(ekey);
+            ekey
+        };
+        let [kp, kg] = [clos(a, Putter), clos(b, Getter)];
         log!(
             &mut self.inner.logger,
             "!! MonoContext callback to new_channel. returning ekeys {:?}!",
