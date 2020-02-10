@@ -1575,9 +1575,7 @@ struct IndexableExpressions {
 }
 
 impl IndexableExpressions {
-    fn new() -> Self {
-        IndexableExpressions { indexable: false }
-    }
+    fn new() -> Self {  IndexableExpressions { indexable: false }  }
     fn error(&self, position: InputPosition) -> VisitorResult {
         Err(ParseError::new(position, "Unindexable expression"))
     }
@@ -1627,10 +1625,12 @@ impl Visitor for IndexableExpressions {
         expr: IndexingExpressionId,
     ) -> VisitorResult {
         let old = self.indexable;
-        self.indexable = false;
+        self.indexable = true;
         self.visit_expression(h, h[expr].subject)?;
+        self.indexable = false;
+        self.visit_expression(h, h[expr].index)?;
         self.indexable = old;
-        self.visit_expression(h, h[expr].index)
+        Ok(())
     }
     fn visit_slicing_expression(
         &mut self,
