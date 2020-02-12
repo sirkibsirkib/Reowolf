@@ -211,6 +211,8 @@ struct BitSetAndIter<'a> {
     cached: Option<u32>, // None <=> iterator is done
 }
 impl<'a> BitSetAndIter<'a> {
+    /// a set of bitsets. the u32s of each are in ascending order of significant digits
+    /// i.e., &[0,1] means {1<<32, 0} while &[0,1] is identical to &[1] and means {1}.
     fn new(sets: &'a [&'a [u32]]) -> Self {
         const EMPTY_SINGLETON: &[&[u32]] = &[&[]];
         let sets = if sets.is_empty() { EMPTY_SINGLETON } else { sets };
@@ -232,6 +234,7 @@ impl Iterator for BitSetAndIter<'_> {
     type Item = usize;
     fn next(&mut self) -> Option<Self::Item> {
         loop {
+            println!("LOOP");
             // get cached chunk. If none exists, iterator is done.
             let mut chunk = self.cached?;
             if chunk == 0 {
@@ -247,6 +250,7 @@ impl Iterator for BitSetAndIter<'_> {
                     *next_bit_index += shift_by;
                     *chunk >>= shift_by;
                 }
+                println!("{:#032b}", *chunk);
             }
             shifty(&mut chunk, 16, &mut self.next_bit_index);
             shifty(&mut chunk, 08, &mut self.next_bit_index);
@@ -271,9 +275,10 @@ impl Iterator for BitSetAndIter<'_> {
 fn test_bit_iter() {
     static SETS: &[&[u32]] = &[
         //
-        &[0b100011000000100101101],
-        &[0b100001000000000110100],
-        &[0b100001000100010100110],
+        &[0b1, 0b1, 0b1, 0b1, 0b1],
+        &[0b1, 0b1, 0b1],
+        &[0b1, 0b1, 0b0, 0b1],
+        &[0b1, 0b1, 0b1, 0b1],
     ];
     let indices = BitSetAndIter::new(SETS).collect::<Vec<_>>();
     println!("indices {:?}", indices);
