@@ -7,7 +7,7 @@ pub(crate) mod connector;
 pub(crate) mod endpoint;
 pub mod errors;
 // mod predicate; // TODO later
-mod polyp;
+mod ecs;
 mod serde;
 pub(crate) mod setup;
 
