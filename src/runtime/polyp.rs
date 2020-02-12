@@ -254,12 +254,13 @@ impl Iterator for BitSetAndIter<'_> {
             shifty(&mut chunk, 02, &mut self.next_bit_index);
             shifty(&mut chunk, 01, &mut self.next_bit_index);
             // assert(chunk & 1 == 1)
-            let index = self.next_u32_index * 32 + self.next_bit_index;
+
             self.next_bit_index += 1;
             self.cached = Some(chunk >> 1);
             if chunk > 0 {
-                // assert(self.next_bit_index <= 32)
-                // because index was calculated with self.next_bit_index - 1
+                let index = self.next_u32_index * 32 + (self.next_bit_index - 1);
+                // assert((self.next_bit_index-1) < 32)
+                // because if chunk was shifted 32+ places, its contents would be zero.
                 return Some(index);
             }
         }
