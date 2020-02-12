@@ -253,9 +253,7 @@ impl Value {
             (Value::Int(IntValue(s)), Value::Short(ShortValue(o))) => {
                 Value::Int(IntValue(*s + *o as i32))
             }
-            (Value::Int(IntValue(s)), Value::Int(IntValue(o))) => {
-                Value::Int(IntValue(*s + *o))
-            }
+            (Value::Int(IntValue(s)), Value::Int(IntValue(o))) => Value::Int(IntValue(*s + *o)),
             (Value::Int(IntValue(s)), Value::Long(LongValue(o))) => {
                 Value::Long(LongValue(*s as i64 + *o))
             }
@@ -306,9 +304,7 @@ impl Value {
             (Value::Int(IntValue(s)), Value::Short(ShortValue(o))) => {
                 Value::Int(IntValue(*s - *o as i32))
             }
-            (Value::Int(IntValue(s)), Value::Int(IntValue(o))) => {
-                Value::Int(IntValue(*s - *o))
-            }
+            (Value::Int(IntValue(s)), Value::Int(IntValue(o))) => Value::Int(IntValue(*s - *o)),
             (Value::Int(IntValue(s)), Value::Long(LongValue(o))) => {
                 Value::Long(LongValue(*s as i64 - *o))
             }
@@ -359,9 +355,7 @@ impl Value {
             (Value::Int(IntValue(s)), Value::Short(ShortValue(o))) => {
                 Value::Int(IntValue(*s % *o as i32))
             }
-            (Value::Int(IntValue(s)), Value::Int(IntValue(o))) => {
-                Value::Int(IntValue(*s % *o))
-            }
+            (Value::Int(IntValue(s)), Value::Int(IntValue(o))) => Value::Int(IntValue(*s % *o)),
             (Value::Int(IntValue(s)), Value::Long(LongValue(o))) => {
                 Value::Long(LongValue(*s as i64 % *o))
             }
@@ -1447,7 +1441,10 @@ impl Store {
         match &h[rexpr] {
             Expression::Variable(var) => {
                 let var = var.declaration.unwrap();
-                let value = self.map.get(&var).expect(&format!("Uninitialized variable {:?}", h[h[var].identifier()]));
+                let value = self
+                    .map
+                    .get(&var)
+                    .expect(&format!("Uninitialized variable {:?}", h[h[var].identifier()]));
                 Ok(value.clone())
             }
             Expression::Indexing(indexing) => {
@@ -1519,7 +1516,7 @@ impl Store {
                 match expr.operation {
                     BinaryOperator::LogicalAnd => {
                         if left.as_boolean().0 == false {
-                            return Ok(left)
+                            return Ok(left);
                         }
                         right = self.eval(h, ctx, expr.right)?;
                         right.as_boolean(); // panics if not a boolean
@@ -1527,7 +1524,7 @@ impl Store {
                     }
                     BinaryOperator::LogicalOr => {
                         if left.as_boolean().0 == true {
-                            return Ok(left)
+                            return Ok(left);
                         }
                         right = self.eval(h, ctx, expr.right)?;
                         right.as_boolean(); // panics if not a boolean
@@ -1577,7 +1574,7 @@ impl Store {
                     elements.push(self.eval(h, ctx, elem)?);
                 }
                 todo!()
-            },
+            }
             Expression::Constant(expr) => Ok(Value::from_constant(&expr.value)),
             Expression::Call(expr) => match expr.method {
                 Method::Create => {
@@ -1670,7 +1667,7 @@ impl Prompt {
                         // Store the values in the declared variables
                         self.store.initialize(h, stmt.from.upcast(), from);
                         self.store.initialize(h, stmt.to.upcast(), to);
-                    },
+                    }
                 }
                 // Continue to next statement
                 self.position = stmt.next();

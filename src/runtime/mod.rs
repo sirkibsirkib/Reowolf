@@ -6,7 +6,8 @@ pub(crate) mod communication;
 pub(crate) mod connector;
 pub(crate) mod endpoint;
 pub mod errors;
-mod predicate; // TODO later
+// mod predicate; // TODO later
+mod polyp;
 mod serde;
 pub(crate) mod setup;
 
@@ -234,7 +235,7 @@ impl Debug for SolutionStorage {
         f.pad("Solutions: [")?;
         for (subtree_id, &index) in self.subtree_id_to_index.iter() {
             let sols = &self.subtree_solutions[index];
-            f.write_fmt(format_args!("{:?} => {:?}, ", subtree_id, sols))?;
+            f.write_fmt(format_args!("{:?}: {:?}, ", subtree_id, sols))?;
         }
         f.pad("]")
     }

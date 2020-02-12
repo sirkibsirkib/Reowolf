@@ -593,9 +593,9 @@ fn routing_filter() {
     /*
     Sender -->filter-->P|A-->sync--> Receiver
     */
-    let timeout = Duration::from_millis(1_500);
+    let timeout = Duration::from_millis(3_000);
     let addrs = [next_addr()];
-    const N: usize = 10;
+    const N: usize = 1;
     assert!(run_connector_set(&[
         //
         &|x| {

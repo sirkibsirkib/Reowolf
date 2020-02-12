@@ -282,9 +282,10 @@ impl Controller {
         }
 
         // 4. Receive incoming messages until the DECISION is made
-        log!(&mut self.inner.logger, "No decision yet. Time to recv messages");
+        log!(&mut self.inner.logger, "`No decision yet`. Time to recv messages");
         self.undelay_all();
         'recv_loop: loop {
+            log!(&mut self.inner.logger, "`POLLING`...");
             let received = self.recv(deadline)?.ok_or_else(|| {
                 log!(
                     &mut self.inner.logger,
@@ -293,9 +294,9 @@ impl Controller {
                 );
                 SyncErr::Timeout
             })?;
+            log!(&mut self.inner.logger, "::: message {:?}...", &received);
             let current_content = match received.msg {
                 Msg::SetupMsg(_) => {
-                    log!(&mut self.inner.logger, "recvd message {:?} and its SETUP :(", &received);
                     // This occurs in the event the connector was malformed during connect()
                     return Err(SyncErr::UnexpectedSetupMsg);
                 }
@@ -303,7 +304,7 @@ impl Controller {
                     if round_index < self.inner.round_index =>
                 {
                     // Old message! Can safely discard
-                    log!(&mut self.inner.logger, "recvd message {:?} and its OLD! :(", &received);
+                    log!(&mut self.inner.logger, "...and its OLD! :(");
                     drop(received);
                     continue 'recv_loop;
                 }
@@ -311,19 +312,14 @@ impl Controller {
                     if round_index > self.inner.round_index =>
                 {
                     // Message from a next round. Keep for later!
-                    log!(
-                        &mut self.inner.logger,
-                        "ecvd message {:?} and its for later. DELAY! :(",
-                        &received
-                    );
+                    log!(&mut self.inner.logger, "... DELAY! :(");
                     self.delay(received);
                     continue 'recv_loop;
                 }
                 Msg::CommMsg(CommMsg { contents, round_index }) => {
                     log!(
                         &mut self.inner.logger,
-                        "recvd a round-appropriate CommMsg {:?} with key {:?}",
-                        &contents,
+                        "... its a round-appropriate CommMsg with key {:?}",
                         received.recipient
                     );
                     assert_eq!(round_index, self.inner.round_index);

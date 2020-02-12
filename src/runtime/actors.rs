@@ -161,6 +161,13 @@ impl PolyP {
                             payload,
                         }
                         .into_msg(m_ctx.inner.round_index);
+                        log!(
+                            &mut m_ctx.inner.logger,
+                            "~ ... ... PolyP sending msg {:?} to {:?} ({:?}) now!",
+                            &msg,
+                            ekey,
+                            (info.channel_id.controller_id, info.channel_id.channel_index),
+                        );
                         endpoint.send(msg)?;
                         to_run.push((predicate, branch));
                     }
@@ -228,8 +235,12 @@ impl PolyP {
                                 &old_predicate
                             );
                             // old_predicate COVERS the assumptions of payload_predicate
-                            let was = branch.inbox.insert(ekey, payload.clone());
-                            assert!(was.is_none()); // INBOX MUST BE EMPTY!
+
+                            if let Some(prev_payload) = branch.inbox.get(&ekey) {
+                                // Incorrect to receive two distinct messages in same branch!
+                                assert_eq!(prev_payload, &payload);
+                            }
+                            branch.inbox.insert(ekey, payload.clone());
                             Some((old_predicate, branch))
                         }
                         Csr::New(new) => {
@@ -242,8 +253,11 @@ impl PolyP {
                             );
                             // payload_predicate has new assumptions. FORK!
                             let mut payload_branch = branch.clone();
-                            let was = payload_branch.inbox.insert(ekey, payload.clone());
-                            assert!(was.is_none()); // INBOX MUST BE EMPTY!
+                            if let Some(prev_payload) = payload_branch.inbox.get(&ekey) {
+                                // Incorrect to receive two distinct messages in same branch!
+                                assert_eq!(prev_payload, &payload);
+                            }
+                            payload_branch.inbox.insert(ekey, payload.clone());
 
                             // put the original back untouched
                             incomplete2.insert(old_predicate, branch);
@@ -258,8 +272,11 @@ impl PolyP {
                             );
                             // payload_predicate has new assumptions. FORK!
                             let mut payload_branch = branch.clone();
-                            let was = payload_branch.inbox.insert(ekey, payload.clone());
-                            assert!(was.is_none()); // INBOX MUST BE EMPTY!
+                            if let Some(prev_payload) = payload_branch.inbox.get(&ekey) {
+                                // Incorrect to receive two distinct messages in same branch!
+                                assert_eq!(prev_payload, &payload);
+                            }
+                            payload_branch.inbox.insert(ekey, payload.clone());
 
                             // put the original back untouched
                             incomplete2.insert(old_predicate, branch);
