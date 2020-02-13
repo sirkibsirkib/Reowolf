@@ -227,6 +227,7 @@ struct Ecs {
     round_solution: Vec<(ChannelId, bool)>, // encodes an ASSIGNMENT
     ekey_channel_ids: Vec<ChannelId>,       // all channel Ids for local keys
     flags: EntityFlags,
+    ekey_to_channel_id: HashMap<Key, ChannelId>,
 }
 #[derive(Default)]
 struct EntityFlags {
@@ -262,7 +263,7 @@ impl Ecs {
         // 2. We discard all payloads; they are all stale now.
         //    All machines are contiguous in the vector
         self.entities
-            .retain(|entity| if let Entity::Machine { .. } = entity { true } else { false });
+            .retain(move |entity| if let Entity::Machine { .. } = entity { true } else { false });
 
         // 3. initially, all the components need a chance to run in MONO mode
         self.flags.to_run_r.set_ones_until(self.entities.len());
@@ -292,7 +293,7 @@ impl Ecs {
             // 2. try and find a payload whose predicate is the same or more general than this one
             //    if it exists, drop the message; it is uninteresting.
             let ekey_bitset = self.flags.ekeys.get(&ekey);
-            if let Some(_eid) = ekey_bitset.map(|ekey_bitset| {
+            if let Some(_eid) = ekey_bitset.map(move |ekey_bitset| {
                 let mut slice_builder = vec![];
                 // collect CONFLICTING assignments into slice_builder
                 for &(channel_id, boolean) in msg.assignments.iter() {
@@ -310,7 +311,7 @@ impl Ecs {
             }
 
             // 3. insert this payload as an entity, overwriting an existing LESS GENERAL payload if it exists.
-            let payload_eid: usize = if let Some(eid) = ekey_bitset.and_then(|ekey_bitset| {
+            let payload_eid: usize = if let Some(eid) = ekey_bitset.and_then(move |ekey_bitset| {
                 let mut slice_builder = vec![];
                 slice_builder.push(ekey_bitset.as_slice());
                 for assignment in msg.assignments.iter() {
@@ -341,9 +342,31 @@ impl Ecs {
 
     fn run_poly_p(&mut self, machine_eid: usize) {
         match self.entities.get_mut(machine_eid) {
-            Some(Entity::Machine { component_index, .. }) => {
+            Some(Entity::Machine { component_index, state }) => {
                 // TODO run the machine
-                // DEBUG: testing the closing of all silent ports
+                use PolyBlocker as Pb;
+                let blocker: Pb = todo!();
+                match blocker {
+                    Pb::Inconsistent => self.flags.inconsistent.set(machine_eid),
+                    Pb::CouldntCheckFiring(key) => {
+                        let &channel_id = self.ekey_to_channel_id.get(&key).unwrap();
+                        let state_true = state.clone();
+                        let assignments: Vec<(ChannelId, bool)> = self
+                            .flags
+                            .assignments
+                            .iter()
+                            .filter_map(move |(&assignment, bitset)| {
+                                match bitset.test(machine_eid) {
+                                    true => Some(assignment),
+                                    false => None,
+                                }
+                            })
+                            .collect();
+
+                        // FORK! this machine becomes FALSE
+                    }
+                    _ => todo!(),
+                }
 
                 // 1. make the assignment of this machine concrete WRT its ports
                 let component_info = self.component_info.get(*component_index).unwrap();
@@ -352,7 +375,7 @@ impl Ecs {
                         .flags
                         .assignments
                         .get(&(channel_id, true))
-                        .map(|bitset| bitset.test(machine_eid))
+                        .map(move |bitset| bitset.test(machine_eid))
                         .unwrap_or(false);
                     if !test {
                         // TRUE assignment wasn't set
@@ -420,7 +443,7 @@ impl Ecs {
             .assignments
             .get(&(channel_id, true))
             .map(test)
-            .or_else(|| self.flags.assignments.get(&(channel_id, false)).map(test))
+            .or_else(move || self.flags.assignments.get(&(channel_id, false)).map(test))
     }
 
     fn feed_msg(&mut self, payload_eid: usize, ekey: Key) {
@@ -463,8 +486,8 @@ impl<'a> Iterator for InAllExceptIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let i = self.next_chunk_index;
         self.next_chunk_index += 1;
-        let init = self.except.get(i).map(|&x| !x).or(Some(1));
-        self.in_all.iter().fold(init, |folding, slice| {
+        let init = self.except.get(i).map(move |&x| !x).or(Some(1));
+        self.in_all.iter().fold(init, move |folding, slice| {
             let a = folding?;
             let b = slice.get(i).copied().unwrap_or(0);
             Some(a & !b)
@@ -488,7 +511,7 @@ impl<'a> Iterator for InNoneExceptIter<'a> {
         let i = self.next_chunk_index;
         self.next_chunk_index += 1;
         let init = self.except.get(i).copied()?;
-        Some(self.in_none.iter().fold(init, |folding, slice| {
+        Some(self.in_none.iter().fold(init, move |folding, slice| {
             let a = folding;
             let b = slice.get(i).copied().unwrap_or(0);
             a & !b
