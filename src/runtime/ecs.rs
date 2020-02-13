@@ -182,6 +182,21 @@ enum Entity {
 
 fn ecs() {
     let entities: Vec<Entity> = Default::default();
+    // invariant: for all ChannelId c, assignments[(c, true)] & assignments[(c, false)] == 0;
     let assignments: HashMap<(ChannelId, bool), BitSet> = Default::default();
+    // invariant: for all Keys k0 != k1, keys[k0] & keys[k1] == 0;
+    let keys: HashMap<Key, BitSet> = Default::default();
+    // invariant: for all Keys k, keys[k] & components == 0;
+    let components: BitSet = Default::default();
+    // invariant: to_run &!components = 0 i.e. to_run is a subset
     let to_run: BitSet = Default::default();
+
+    // 1.
 }
+
+/*
+needed operations:
+
+1. insert a payload and overwrite / insert its predicate assignments
+2. run all machines that
+*/
