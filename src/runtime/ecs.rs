@@ -239,6 +239,47 @@ struct EntityFlags {
     to_run_r: BitSet, // read from and drained while...
     to_run_w: BitSet, // .. written to and populated. }
 }
+impl Debug for Ecs {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let elen = self.entities.len();
+
+        write!(f, "{:<30}", "payloads")?;
+        print_flag_bits(f, &self.flags.payloads, elen)?;
+
+        write!(f, "{:<30}", "inconsistent")?;
+        print_flag_bits(f, &self.flags.inconsistent, elen)?;
+        write!(f, "{:<30}", "sync_ended")?;
+        print_flag_bits(f, &self.flags.sync_ended, elen)?;
+        write!(f, "{:<30}", "to_run_r")?;
+        print_flag_bits(f, &self.flags.to_run_r, elen)?;
+        write!(f, "{:<30}", "to_run_w")?;
+        print_flag_bits(f, &self.flags.to_run_w, elen)?;
+
+        for (assignment, bitset) in self.flags.assignments.iter() {
+            write!(f, "{:<30?}", assignment)?;
+            print_flag_bits(f, bitset, elen)?;
+        }
+        for (ekey, bitset) in self.flags.ekeys.iter() {
+            write!(f, "Ekey {:<30?}", ekey)?;
+            print_flag_bits(f, bitset, elen)?;
+        }
+        Ok(())
+    }
+}
+fn print_flag_bits(
+    f: &mut std::fmt::Formatter,
+    bitset: &BitSet,
+    ecs_keys_end: usize,
+) -> std::fmt::Result {
+    for i in 0..ecs_keys_end {
+        f.pad(match bitset.test(i) {
+            true => "1",
+            false => "0",
+        })?;
+    }
+    write!(f, "\n");
+    Ok(())
+}
 
 struct Protocol {
     // TODO
@@ -247,6 +288,12 @@ struct Protocol {
 struct Msg {
     assignments: Vec<(ChannelId, bool)>, // invariant: no two elements have same ChannelId value
     payload: Payload,
+}
+
+#[test]
+fn ecs_test() {
+    let mut ecs = Ecs::default();
+    println!("{:?}", &ecs);
 }
 impl Ecs {
     fn round(&mut self) {
@@ -337,6 +384,7 @@ impl Ecs {
             };
 
             self.feed_msg(payload_eid, ekey);
+            // TODO run all in self.flags.to_run_w
         }
     }
 
@@ -349,21 +397,33 @@ impl Ecs {
                 match blocker {
                     Pb::Inconsistent => self.flags.inconsistent.set(machine_eid),
                     Pb::CouldntCheckFiring(key) => {
-                        let &channel_id = self.ekey_to_channel_id.get(&key).unwrap();
+                        // 1. clone the machine
                         let state_true = state.clone();
-                        let assignments: Vec<(ChannelId, bool)> = self
-                            .flags
+                        let machine_eid_true = self.entities.len();
+                        self.entities.push(Entity::Machine {
+                            state: state_true,
+                            component_index: *component_index,
+                        });
+                        // 2. copy the assignments of the existing machine to the new one
+                        for bitset in self.flags.assignments.values() {
+                            if bitset.test(machine_eid) {
+                                bitset.set(machine_eid_true);
+                            }
+                        }
+                        // 3. give the old machine FALSE and the new machine TRUE
+                        let &channel_id = self.ekey_to_channel_id.get(&key).unwrap();
+                        self.flags
                             .assignments
-                            .iter()
-                            .filter_map(move |(&assignment, bitset)| {
-                                match bitset.test(machine_eid) {
-                                    true => Some(assignment),
-                                    false => None,
-                                }
-                            })
-                            .collect();
-
-                        // FORK! this machine becomes FALSE
+                            .entry((channel_id, false))
+                            .or_default()
+                            .set(machine_eid);
+                        self.flags
+                            .assignments
+                            .entry((channel_id, true))
+                            .or_default()
+                            .set(machine_eid_true);
+                        self.run_poly_p(machine_eid);
+                        self.run_poly_p(machine_eid_true);
                     }
                     _ => todo!(),
                 }
@@ -463,10 +523,11 @@ impl Ecs {
         let chunk_iter =
             InAllExceptIter::new(slice_builder.as_slice(), self.flags.payloads.as_slice());
         let mut iter = BitChunkIter::new(chunk_iter);
-        if let Some(component_key) = iter.next() {
+        if let Some(machine_eid) = iter.next() {
             // TODO is it possible for there to be 2+ iterations? I'm thinking No
             // RUN THIS MACHINE
-            ekey_bitset.unset(component_key); // no longer blocked!
+            ekey_bitset.unset(machine_eid);
+            self.flags.to_run_w.set(machine_eid);
         }
     }
 }
