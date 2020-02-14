@@ -611,7 +611,7 @@ impl Drop for FlagMatrix {
     fn drop(&mut self) {
         let layout = Self::layout_for(self.u32s_total);
         unsafe {
-            //?
+            // ?
             std::alloc::dealloc(self.bytes as *mut u8, layout);
         }
     }
@@ -640,10 +640,8 @@ impl FlagMatrix {
         match [new_u32s_per_row, new_u32s_total] {
             [None, None] => { /* do nothing */ }
             [None, Some(new_u32s_total)] => {
-                assert!(new_u32s_total > self.u32s_total);
                 // realloc only!
-                dbg!("REALLOC ONLY");
-                println!("BEFORE {:?}", self.bytes);
+                // assert!(new_u32s_total > self.u32s_total);
                 let old_layout = Self::layout_for(self.u32s_total);
                 let new_layout = Self::layout_for(new_u32s_total);
                 let new_bytes = unsafe {
@@ -663,9 +661,8 @@ impl FlagMatrix {
                 self.u32s_total = new_u32s_total;
             }
             [Some(new_u32s_per_row), None] => {
-                assert!(new_u32s_per_row > self.u32s_per_row);
                 // shift only!
-                dbg!("SHIFT ONLY");
+                // assert!(new_u32s_per_row > self.u32s_per_row);
                 for r in (0..self.dims[0]).rev() {
                     // iterate in REVERSE order because new row[n] may overwrite old row[n+m]
                     unsafe {
@@ -681,10 +678,9 @@ impl FlagMatrix {
                 self.u32s_per_row = new_u32s_per_row;
             }
             [Some(new_u32s_per_row), Some(new_u32s_total)] => {
-                assert!(new_u32s_total > self.u32s_total);
-                assert!(new_u32s_per_row > self.u32s_per_row);
                 // alloc AND shift!
-                dbg!("BOTH");
+                // assert!(new_u32s_total > self.u32s_total);
+                // assert!(new_u32s_per_row > self.u32s_per_row);
                 let old_layout = Self::layout_for(self.u32s_total);
                 let new_layout = Self::layout_for(new_u32s_total);
                 let new_bytes = unsafe { std::alloc::alloc(new_layout) as *mut u32 };
@@ -791,73 +787,6 @@ impl FlagMatrix {
         });
         // 3. return an unsafe iterator over column indices
         BitChunkIter::new(chunk_iter).filter(move |&x| x < self.dims[1])
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
-enum ColumnCombinator<'a> {
-    Row(usize),
-    True,
-    False,
-    And(&'a ColumnCombinator<'a>, &'a ColumnCombinator<'a>),
-    Or(&'a ColumnCombinator<'a>, &'a ColumnCombinator<'a>),
-    Not(&'a ColumnCombinator<'a>),
-}
-struct FlaggedColumnIter<'a> {
-    flag_matrix: &'a FlagMatrix,
-    next_column_chunk: usize,
-    combinator: &'a ColumnCombinator<'a>,
-}
-impl<'a> FlaggedColumnIter<'a> {
-    fn new(flag_matrix: &'a FlagMatrix, combinator: &'a ColumnCombinator<'a>) -> Self {
-        Self { flag_matrix, combinator, next_column_chunk: 0 }
-    }
-    /// #Safety: bounds on self.next_column_chunk have been checked with self.flag_matrix
-    /// retrieves the column chunk at self.next_column_chunk
-    unsafe fn combine(&self, c: &ColumnCombinator) -> u32 {
-        use ColumnCombinator as Cc;
-        match c {
-            Cc::Row(row) => self.flag_matrix.copy_chunk_unchecked(*row, self.next_column_chunk),
-            Cc::False => 0u32,
-            Cc::True => !0u32,
-            Cc::And(a, b) => self.combine(a) & self.combine(b),
-            Cc::Or(a, b) => self.combine(a) | self.combine(b),
-            Cc::Not(a) => !self.combine(a),
-        }
-    }
-}
-impl<'a> Iterator for FlaggedColumnIter<'a> {
-    type Item = u32;
-    fn next(&mut self) -> Option<Self::Item> {
-        struct CombineCtx<'a> {
-            flag_matrix: &'a FlagMatrix,
-            nth_col_chunk: usize,
-        }
-        if self.next_column_chunk >= self.flag_matrix.u32s_per_row {
-            None
-        } else {
-            let x = unsafe { self.combine(self.combinator) };
-            self.next_column_chunk += 1;
-            Some(x)
-        }
-    }
-}
-
-struct ColumnIter<'a> {
-    bit_chunk_iter: BitChunkIter<FlaggedColumnIter<'a>>,
-}
-impl<'a> ColumnIter<'a> {
-    fn new(m: &'a FlagMatrix, combinator: &'a ColumnCombinator) -> Self {
-        let iter = FlaggedColumnIter::new(m, combinator);
-        let bit_chunk_iter = BitChunkIter::new(iter);
-        Self { bit_chunk_iter }
-    }
-}
-impl<'a> Iterator for ColumnIter<'a> {
-    type Item = usize;
-    fn next(&mut self) -> Option<Self::Item> {
-        let v: Option<usize> = self.bit_chunk_iter.next();
-        v.filter(|&x| x < self.bit_chunk_iter.chunk_iter.flag_matrix.dims[1])
     }
 }
 
