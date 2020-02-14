@@ -610,8 +610,7 @@ impl Debug for FlagMatrix {
     }
 }
 
-// invariant: all bits outside of reach of columns or rows BUT inside the
-// allocation, are zero.
+// invariant: all bits outside of 0..columns and 0..rows BUT in the allocated space are ZERO
 struct FlagMatrix {
     bytes: *mut u32,
     u32s_total: usize,
@@ -634,6 +633,35 @@ impl Drop for FlagMatrix {
 impl FlagMatrix {
     fn get_dims(&self) -> &[usize; 2] {
         &self.dims
+    }
+
+    fn set_entire_row(&mut self, row: usize) {
+        assert!(row < self.dims[0]);
+        let mut cols_left = self.dims[1];
+        unsafe {
+            let mut ptr = self.bytes.add(self.offset_of_chunk_unchecked([row, 0]));
+            while cols_left >= 32 {
+                *ptr = !0u32;
+                cols_left -= 32;
+                ptr = ptr.add(1);
+            }
+            if cols_left > 0 {
+                // jagged chunk!
+                *ptr |= (!0) >> (32 - cols_left);
+            }
+        }
+    }
+    fn unset_entire_row(&mut self, row: usize) {
+        assert!(row < self.dims[0]);
+        let mut cols_left = self.dims[1];
+        unsafe {
+            let mut ptr = self.bytes.add(self.offset_of_chunk_unchecked([row, 0]));
+            while cols_left > 0 {
+                *ptr = 0u32;
+                cols_left -= 32;
+                ptr = ptr.add(1);
+            }
+        }
     }
 
     fn reshape(&mut self, new_dims: [usize; 2]) {
@@ -677,7 +705,16 @@ impl FlagMatrix {
             }
         }
 
-        // TODO what about rows?
+        // 4. if we won't do a new allocation, zero any bit no longer in rows
+        if new_dims[0] < self.dims[0] && new_u32s_total.is_none() {
+            // zero all bytes from beginning of first removed row,
+            // to end of last removed row
+            unsafe {
+                self.bytes
+                    .add(self.offset_of_chunk_unchecked([new_dims[0], 0]))
+                    .write_bytes(0u8, self.u32s_per_row * (self.dims[0] - new_dims[0]));
+            }
+        }
 
         dbg!(new_u32s_per_row, new_u32s_total);
         match [new_u32s_per_row, new_u32s_total] {
@@ -839,11 +876,12 @@ impl FlagMatrix {
 
 #[test]
 fn matrix() {
-    let mut m = FlagMatrix::new([5, 5], [0, 0]);
+    let mut m = FlagMatrix::new([6, 6], [0, 0]);
     for i in 0..5 {
         m.set([0, i]);
         m.set([i, i]);
     }
+    m.set_entire_row(5);
     println!("{:?}", &m);
     m.reshape([6, 40]);
     let iter = m.col_iter_t1fn(0, &[1, 2, 3]);
