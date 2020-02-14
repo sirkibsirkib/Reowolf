@@ -577,22 +577,15 @@ EXTREME approach:
 ==================
 */
 
-struct FlagMatrix {
-    bytes: *mut u32,
-    u32s_per_row: usize,
-    rows: usize,
-    columns: usize, // conceptually: a column of BITS
-                    // invariant: bytes.len() == rows * columns
-}
 impl Debug for FlagMatrix {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        for r in 0..self.rows {
+        for r in 0..self.dims[0] {
             write!(f, "|")?;
-            for c in 0..self.columns {
+            for c in 0..self.dims[1] {
                 write!(
                     f,
                     "{}",
-                    match self.test(r, c) {
+                    match self.test([r, c]) {
                         false => '0',
                         true => '1',
                     }
@@ -604,13 +597,19 @@ impl Debug for FlagMatrix {
     }
 }
 
+struct FlagMatrix {
+    bytes: *mut u32,
+    u32s_total: usize,
+    u32s_per_row: usize,
+    dims: [usize; 2],
+}
 #[inline(always)]
 fn ceiling_to_mul_32(value: usize) -> usize {
     (value + 31) & !31
 }
 impl Drop for FlagMatrix {
     fn drop(&mut self) {
-        let layout = Self::layout_for(self.rows, self.u32s_per_row);
+        let layout = Self::layout_for(self.u32s_total);
         unsafe {
             //?
             std::alloc::dealloc(self.bytes as *mut u8, layout);
@@ -618,60 +617,129 @@ impl Drop for FlagMatrix {
     }
 }
 impl FlagMatrix {
-    fn layout_for(rows: usize, u32s_per_row: usize) -> std::alloc::Layout {
-        let u32s = u32s_per_row * rows;
+    fn get_dims(&self) -> &[usize; 2] {
+        &self.dims
+    }
+    // self.dims have been arbitrarily mutated!
+    // reshape the matrix as necessary to ensure there's enough space.
+    fn maybe_reshape(&mut self, new_dims: [usize; 2]) {
+        let old_u32s_per_row = self.u32s_per_row;
+        let old_u32s_total = self.u32s_total;
+        let old_u32s_per_row_used = ceiling_to_mul_32(new_dims[1]) / 32;
+
+        // 1. update u32s_per_row
+        let min_u32s_per_row = ceiling_to_mul_32(new_dims[1]) / 32;
+        let must_shift_rows = if old_u32s_per_row < min_u32s_per_row {
+            // uh oh! need to shift my rows!
+            self.u32s_per_row = min_u32s_per_row * 2;
+            true
+        } else {
+            false
+        };
+
+        // 2. update u32s_total
+        let min_u32s_total = self.u32s_per_row * new_dims[0];
+        let must_realloc = if old_u32s_total < min_u32s_total {
+            // uh oh! need to shift my rows!
+            self.u32s_total = min_u32s_total * 2;
+            true
+        } else {
+            false
+        };
+
+        match [must_shift_rows, must_realloc] {
+            [false, false] => { /* do nothing */ }
+            [false, true] => {
+                // realloc only!
+                let new_layout = Self::layout_for(self.u32s_total);
+                let old_layout = Self::layout_for(old_u32s_total);
+                let new_bytes = unsafe {
+                    let new_bytes = std::alloc::alloc(new_layout) as *mut u32;
+                    std::ptr::copy_nonoverlapping(self.bytes, new_bytes, old_u32s_total);
+                    std::alloc::dealloc(self.bytes as *mut u8, old_layout);
+                    new_bytes
+                };
+                self.bytes = new_bytes;
+            }
+            [true, false] => {
+                // shift only!
+                for r in (0..self.dims[0]).rev() {
+                    unsafe {
+                        let src = self.bytes.offset((r * old_u32s_per_row) as isize);
+                        let dest = self.bytes.offset((r * self.u32s_per_row) as isize);
+                        std::ptr::copy(dest, src, old_u32s_per_row_used);
+                    }
+                }
+            }
+            [true, true] => {
+                // alloc AND shift!
+                let new_layout = Self::layout_for(self.u32s_total);
+                let old_layout = Self::layout_for(old_u32s_total);
+                let new_bytes = unsafe { std::alloc::alloc(new_layout) as *mut u32 };
+                for r in (0..self.dims[0]).rev() {
+                    unsafe {
+                        let src = self.bytes.offset((r * old_u32s_per_row) as isize);
+                        let dest = new_bytes.offset((r * self.u32s_per_row) as isize);
+                        std::ptr::copy_nonoverlapping(dest, src, old_u32s_per_row_used);
+                    }
+                }
+                unsafe { std::alloc::dealloc(self.bytes as *mut u8, old_layout) };
+                self.bytes = new_bytes;
+            }
+        }
+        self.dims = new_dims;
+    }
+
+    fn layout_for(u32s_total: usize) -> std::alloc::Layout {
         unsafe {
             // this layout is ALWAYS valid:
             // 1. size is always nonzero
             // 2. size is always a multiple of 4 and 4-aligned
-            std::alloc::Layout::from_size_align_unchecked(4 * u32s.max(1), 4)
+            std::alloc::Layout::from_size_align_unchecked(u32s_total.max(1), 4)
         }
     }
-    fn new(rows: usize, columns: usize) -> Self {
-        let u32s_per_row = ceiling_to_mul_32(columns) / 32;
-        let layout = Self::layout_for(rows, u32s_per_row);
+    fn new(dims: [usize; 2], extra_dim_space: [usize; 2]) -> Self {
+        let u32s_per_row = ceiling_to_mul_32(dims[1] + extra_dim_space[1]) / 32; // HALF dead columns
+        let u32s_total = u32s_per_row * (dims[1] + extra_dim_space[1]);
+        let layout = Self::layout_for(u32s_total);
         let bytes = unsafe {
             // ?
             std::alloc::alloc(layout)
         } as *mut u32;
-        Self { bytes, u32s_per_row, rows, columns }
+        Self { bytes, u32s_total, u32s_per_row, dims }
     }
-    fn assert_within_bounds(&self, row: usize, column: usize) {
-        assert!(column < self.columns);
-        assert!(row < self.rows);
+    fn assert_within_bounds(&self, at: [usize; 2]) {
+        assert!(at[0] < self.dims[0]);
+        assert!(at[1] < self.dims[1]);
     }
-    fn chunk_for(&self, row: usize, column: usize) -> usize {
-        row * self.u32s_per_row + column / 32
+    #[inline(always)]
+    fn offset_of_chunk_unchecked(&self, at: [usize; 2]) -> usize {
+        self.u32s_per_row * at[0] + at[1]
     }
-    #[inline]
-    //given: [row, column], return [bytes_index, u32_bit]
-    fn vec_addr(&self, row: usize, column: usize) -> [usize; 2] {
-        let bytes_index = self.chunk_for(row, column);
-        let u32_bit = column % 32;
-        [bytes_index, u32_bit]
+    #[inline(always)]
+    fn offsets_unchecked(&self, at: [usize; 2]) -> [usize; 2] {
+        let of_chunk = self.offset_of_chunk_unchecked(at);
+        let in_chunk = at[1] % 32;
+        [of_chunk, in_chunk]
     }
-    fn set(&mut self, row: usize, column: usize) {
-        self.assert_within_bounds(row, column);
-        let [bytes_index, u32_bit] = self.vec_addr(row, column);
-        unsafe { *self.bytes.offset(bytes_index as isize) |= 1 << u32_bit };
+    fn set(&mut self, at: [usize; 2]) {
+        self.assert_within_bounds(at);
+        let [o_of, o_in] = self.offsets_unchecked(at);
+        unsafe { *self.bytes.offset(o_of as isize) |= 1 << o_in };
     }
-    fn unset(&mut self, row: usize, column: usize) {
-        self.assert_within_bounds(row, column);
-        let [bytes_index, u32_bit] = self.vec_addr(row, column);
-        unsafe { *self.bytes.offset(bytes_index as isize) &= !(1 << u32_bit) };
+    fn unset(&mut self, at: [usize; 2]) {
+        self.assert_within_bounds(at);
+        let [o_of, o_in] = self.offsets_unchecked(at);
+        unsafe { *self.bytes.offset(o_of as isize) &= !(1 << o_in) };
     }
-    fn test(&self, row: usize, column: usize) -> bool {
-        self.assert_within_bounds(row, column);
-        let [bytes_index, u32_bit] = self.vec_addr(row, column);
-        unsafe { *self.bytes.offset(bytes_index as isize) & (1 << u32_bit) != 0 }
-    }
-    fn clear(&mut self) {
-        self.rows = 0;
-        self.columns = 0;
+    fn test(&self, at: [usize; 2]) -> bool {
+        self.assert_within_bounds(at);
+        let [o_of, o_in] = self.offsets_unchecked(at);
+        unsafe { *self.bytes.offset(o_of as isize) & (1 << o_in) != 0 }
     }
     unsafe fn copy_chunk_unchecked(&self, row: usize, nth_col_chunk: usize) -> u32 {
-        let i = (self.u32s_per_row * row) + nth_col_chunk;
-        *self.bytes.offset(i as isize)
+        let o_of = (self.u32s_per_row * row) + nth_col_chunk;
+        *self.bytes.offset(o_of as isize)
     }
 }
 
@@ -738,17 +806,18 @@ impl<'a> Iterator for ColumnIter<'a> {
     type Item = usize;
     fn next(&mut self) -> Option<Self::Item> {
         let v: Option<usize> = self.bit_chunk_iter.next();
-        v.filter(|&x| x < self.bit_chunk_iter.chunk_iter.flag_matrix.columns)
+        v.filter(|&x| x < self.bit_chunk_iter.chunk_iter.flag_matrix.dims[1])
     }
 }
 
 #[test]
 fn matrix() {
-    let mut m = FlagMatrix::new(2, 10);
-    m.set(0, 1);
-    m.set(0, 2);
-    m.set(1, 2);
-    m.set(1, 2);
+    let mut m = FlagMatrix::new([2, 10], [0, 0]);
+    m.set([0, 1]);
+    m.set([0, 2]);
+    m.set([1, 2]);
+    m.set([1, 2]);
+    m.reshape(|[rows, _]| *rows += 1);
     use ColumnCombinator as Cc;
     let combinator = Cc::Or(&Cc::Row(0), &Cc::True);
     let iter = ColumnIter::new(&m, &combinator);
