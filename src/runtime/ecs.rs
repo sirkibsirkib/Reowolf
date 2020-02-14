@@ -651,8 +651,9 @@ impl FlagMatrix {
                     // copy the previous total
                     self.bytes.copy_to_nonoverlapping(new_bytes, self.u32s_total);
                     // and zero the remainder
-                    let tail = new_bytes.offset(self.u32s_total as isize);
-                    tail.write_bytes(0u8, new_u32s_total - self.u32s_total);
+                    new_bytes
+                        .add(self.u32s_total)
+                        .write_bytes(0u8, new_u32s_total - self.u32s_total);
                     // drop the previous buffer
                     std::alloc::dealloc(self.bytes as *mut u8, old_layout);
                     new_bytes
@@ -668,13 +669,13 @@ impl FlagMatrix {
                 for r in (0..self.dims[0]).rev() {
                     // iterate in REVERSE order because new row[n] may overwrite old row[n+m]
                     unsafe {
-                        let src = self.bytes.offset((r * self.u32s_per_row) as isize);
-                        let dest = self.bytes.offset((r * new_u32s_per_row) as isize);
+                        let src = self.bytes.add(r * self.u32s_per_row);
+                        let dest = self.bytes.add(r * new_u32s_per_row);
                         // copy the used prefix
                         src.copy_to(dest, self.u32s_per_row);
                         // and zero the remainder
-                        let tail = dest.offset(self.u32s_per_row as isize);
-                        tail.write_bytes(0u8, new_u32s_per_row - self.u32s_per_row);
+                        dest.add(self.u32s_per_row)
+                            .write_bytes(0u8, new_u32s_per_row - self.u32s_per_row);
                     }
                 }
                 self.u32s_per_row = new_u32s_per_row;
@@ -690,14 +691,18 @@ impl FlagMatrix {
                 for r in 0..self.dims[0] {
                     // iterate forwards over rows!
                     unsafe {
-                        let src = self.bytes.offset((r * self.u32s_per_row) as isize);
-                        let dest = new_bytes.offset((r * new_u32s_per_row) as isize);
+                        let src = self.bytes.add(r * self.u32s_per_row);
+                        let dest = new_bytes.add(r * new_u32s_per_row);
                         // copy the used prefix
                         src.copy_to_nonoverlapping(dest, self.u32s_per_row);
                         // and zero the remainder
-                        let tail = dest.offset(self.u32s_per_row as isize);
-                        tail.write_bytes(0u8, new_u32s_per_row - self.u32s_per_row);
+                        dest.add(self.u32s_per_row)
+                            .write_bytes(0u8, new_u32s_per_row - self.u32s_per_row);
                     }
+                }
+                let fresh_rows_at = self.dims[0] * new_u32s_per_row;
+                unsafe {
+                    new_bytes.add(fresh_rows_at).write_bytes(0u8, new_u32s_total - fresh_rows_at);
                 }
                 unsafe { std::alloc::dealloc(self.bytes as *mut u8, old_layout) };
                 self.u32s_per_row = new_u32s_per_row;
@@ -709,12 +714,12 @@ impl FlagMatrix {
     }
 
     fn layout_for(u32s_total: usize) -> std::alloc::Layout {
-        // unsafe {
-        // this layout is ALWAYS valid:
-        // 1. size is always nonzero
-        // 2. size is always a multiple of 4 and 4-aligned
-        std::alloc::Layout::from_size_align(4 * u32s_total.max(1), 4).expect("AHH")
-        // }
+        unsafe {
+            // this layout is ALWAYS valid:
+            // 1. size is always nonzero
+            // 2. size is always a multiple of 4 and 4-aligned
+            std::alloc::Layout::from_size_align_unchecked(4 * u32s_total.max(1), 4)
+        }
     }
     fn new(dims: [usize; 2], extra_dim_space: [usize; 2]) -> Self {
         let u32s_per_row = ceiling_to_mul_32(dims[1] + extra_dim_space[1]) / 32; // HALF dead columns
@@ -734,33 +739,58 @@ impl FlagMatrix {
         assert!(at[1] < self.dims[1]);
     }
     #[inline(always)]
-    fn offset_of_chunk_unchecked(&self, at: [usize; 2]) -> usize {
+    fn add_of_chunk_unchecked(&self, at: [usize; 2]) -> usize {
         (self.u32s_per_row * at[0]) + at[1] / 32
     }
     #[inline(always)]
-    fn offsets_unchecked(&self, at: [usize; 2]) -> [usize; 2] {
-        let of_chunk = self.offset_of_chunk_unchecked(at);
+    fn adds_unchecked(&self, at: [usize; 2]) -> [usize; 2] {
+        let of_chunk = self.add_of_chunk_unchecked(at);
         let in_chunk = at[1] % 32;
         [of_chunk, in_chunk]
     }
     fn set(&mut self, at: [usize; 2]) {
         self.assert_within_bounds(at);
-        let [o_of, o_in] = self.offsets_unchecked(at);
-        unsafe { *self.bytes.offset(o_of as isize) |= 1 << o_in };
+        let [o_of, o_in] = self.adds_unchecked(at);
+        unsafe { *self.bytes.add(o_of) |= 1 << o_in };
     }
     fn unset(&mut self, at: [usize; 2]) {
         self.assert_within_bounds(at);
-        let [o_of, o_in] = self.offsets_unchecked(at);
-        unsafe { *self.bytes.offset(o_of as isize) &= !(1 << o_in) };
+        let [o_of, o_in] = self.adds_unchecked(at);
+        unsafe { *self.bytes.add(o_of) &= !(1 << o_in) };
     }
     fn test(&self, at: [usize; 2]) -> bool {
         self.assert_within_bounds(at);
-        let [o_of, o_in] = self.offsets_unchecked(at);
-        unsafe { *self.bytes.offset(o_of as isize) & (1 << o_in) != 0 }
+        let [o_of, o_in] = self.adds_unchecked(at);
+        unsafe { *self.bytes.add(o_of) & (1 << o_in) != 0 }
     }
-    unsafe fn copy_chunk_unchecked(&self, row: usize, nth_col_chunk: usize) -> u32 {
-        let o_of = (self.u32s_per_row * row) + nth_col_chunk;
-        *self.bytes.offset(o_of as isize)
+    unsafe fn copy_chunk_unchecked(&self, row: usize, col_chunk_index: usize) -> u32 {
+        let o_of = (self.u32s_per_row * row) + col_chunk_index;
+        *self.bytes.add(o_of)
+    }
+
+    // return an efficient interator over column indices c in the range 0..self.dims[1]
+    // where self.test([t_row, c]) && f_rows.iter().all(|&f_row| !self.test([f_row, c]))
+    fn col_iter_t1fn<'a, 'b: 'a>(
+        &'a self,
+        t_row: usize,
+        f_rows: &'b [usize],
+    ) -> impl Iterator<Item = usize> + 'a {
+        // 1. do all bounds checks
+        assert!(t_row < self.dims[0]);
+        for &row in f_rows.iter() {
+            assert!(row < self.dims[0]);
+        }
+
+        // 2. construct an unsafe iterator over chunks
+        let chunk_iter = (0..self.u32s_per_row).map(move |col_chunk_index| {
+            let t_chunk = unsafe { self.copy_chunk_unchecked(t_row, col_chunk_index) };
+            f_rows.iter().fold(t_chunk, |chunk, &f_row| {
+                let f_chunk = unsafe { self.copy_chunk_unchecked(f_row, col_chunk_index) };
+                chunk & !f_chunk
+            })
+        });
+        // 3. return an unsafe iterator over column indices
+        BitChunkIter::new(chunk_iter).filter(move |&x| x < self.dims[1])
     }
 }
 
@@ -835,16 +865,14 @@ impl<'a> Iterator for ColumnIter<'a> {
 fn matrix() {
     let mut m = FlagMatrix::new([5, 5], [0, 0]);
     for i in 0..5 {
-        m.set([i; 2]);
+        m.set([0, i]);
+        m.set([i, i]);
     }
     println!("{:?}", &m);
-    // m.reshape([3, 5]);
     m.reshape([6, 40]);
-    // use ColumnCombinator as Cc;
-    // let combinator = Cc::Or(&Cc::Row(0), &Cc::True);
-    // let iter = ColumnIter::new(&m, &combinator);
-    // for c in iter {
-    //     println!("{:?}", c);
-    // }
+    let iter = m.col_iter_t1fn(0, &[1, 2, 3]);
+    for c in iter {
+        println!("{:?}", c);
+    }
     println!("{:?}", &m);
 }
