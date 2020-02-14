@@ -2,7 +2,7 @@
 
 pub use core::{
     cmp::Ordering,
-    fmt::Debug,
+    fmt::{Debug, Formatter},
     hash::{Hash, Hasher},
     ops::{Range, RangeFrom},
     time::Duration,

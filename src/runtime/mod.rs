@@ -231,7 +231,7 @@ trait Messengerlike {
 
 /////////////////////////////////
 impl Debug for SolutionStorage {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.pad("Solutions: [")?;
         for (subtree_id, &index) in self.subtree_id_to_index.iter() {
             let sols = &self.subtree_solutions[index];
@@ -454,7 +454,7 @@ impl Predicate {
     }
 }
 impl Debug for Predicate {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.pad("{")?;
         for (ChannelId { controller_id, channel_index }, &v) in self.assigned.iter() {
             f.write_fmt(format_args!(
