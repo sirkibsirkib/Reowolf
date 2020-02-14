@@ -90,7 +90,7 @@ impl<I: Iterator<Item = u32>> BitChunkIter<I> {
         // first chunk is always a dummy zero, as if chunk_iter yielded Some(0).
         // Consequences:
         // 1. our next_bit_index is always off by 32 (we correct for it in Self::next) (no additional overhead)
-        // 2. we don't need to ever cache an Option. We can encounter them in Self::next.
+        // 2. we cache u32 and not Option<u32>, because chunk_iter.next() is only called in Self::next.
         Self { chunk_iter, next_bit_index: 0, cached: 0 }
     }
 }
@@ -114,18 +114,18 @@ impl<I: Iterator<Item = u32>> Iterator for BitChunkIter<I> {
         // Shift the contents of chunk until the least significant bit is 1.
         // ... being sure to increment next_bit_index accordingly.
         #[inline(always)]
-        fn shift_and_inc(chunk: &mut u32, shift_by: usize, next_bit_index: &mut usize) {
-            if *chunk & ((1 << shift_by) - 1) == 0 {
-                *next_bit_index += shift_by;
-                *chunk >>= shift_by;
+        fn skip_n_zeroes(chunk: &mut u32, n: usize, next_bit_index: &mut usize) {
+            if *chunk & ((1 << n) - 1) == 0 {
+                // n least significant bits are zero. skip n bits.
+                *next_bit_index += n;
+                *chunk >>= n;
             }
-            // println!("{:#032b}", *chunk);
         }
-        shift_and_inc(&mut chunk, 16, &mut self.next_bit_index);
-        shift_and_inc(&mut chunk, 08, &mut self.next_bit_index);
-        shift_and_inc(&mut chunk, 04, &mut self.next_bit_index);
-        shift_and_inc(&mut chunk, 02, &mut self.next_bit_index);
-        shift_and_inc(&mut chunk, 01, &mut self.next_bit_index);
+        skip_n_zeroes(&mut chunk, 16, &mut self.next_bit_index);
+        skip_n_zeroes(&mut chunk, 08, &mut self.next_bit_index);
+        skip_n_zeroes(&mut chunk, 04, &mut self.next_bit_index);
+        skip_n_zeroes(&mut chunk, 02, &mut self.next_bit_index);
+        skip_n_zeroes(&mut chunk, 01, &mut self.next_bit_index);
         // least significant bit of chunk is 1.
         // assert(chunk & 1 == 1)
 
@@ -253,8 +253,7 @@ fn print_flag_bits(f: &mut Formatter, bitset: &BitSet, elen: usize) -> std::fmt:
             false => "0",
         })?;
     }
-    write!(f, "\n");
-    Ok(())
+    write!(f, "\n")
 }
 
 struct Protocol {
@@ -611,6 +610,8 @@ impl Debug for FlagMatrix {
     }
 }
 
+// invariant: all bits outside of reach of columns or rows BUT inside the
+// allocation, are zero.
 struct FlagMatrix {
     bytes: *mut u32,
     u32s_total: usize,
@@ -650,11 +651,39 @@ impl FlagMatrix {
             _ => None,
         };
 
+        // 3. set any bits no longer in columns to zero
+        let new_last_chunk_zero_prefix = new_dims[1] % 32;
+        if new_dims[1] < self.dims[1] {
+            let old_min_u32_per_row = ceiling_to_mul_32(new_dims[1]) / 32;
+            let new_min_u32_per_row = ceiling_to_mul_32(self.dims[1]) / 32;
+            let common_rows = self.dims[0].min(new_dims[0]);
+            if old_min_u32_per_row < new_min_u32_per_row {
+                // zero chunks made entirely of removed columns
+                for row in 0..common_rows {
+                    unsafe {
+                        self.bytes
+                            .add(self.offset_of_chunk_unchecked([row, old_min_u32_per_row]))
+                            .write_bytes(0u8, new_min_u32_per_row - old_min_u32_per_row);
+                    }
+                }
+            }
+            if new_last_chunk_zero_prefix > 0 {
+                // wipe out new_last_chunk_zero_prefix-most significant bits of all new last column chunks
+                let mask: u32 = !0u32 >> new_last_chunk_zero_prefix;
+                for row in 0..common_rows {
+                    let o_of = self.offset_of_chunk_unchecked([row, new_min_u32_per_row - 1]);
+                    unsafe { *self.bytes.add(o_of) &= mask };
+                }
+            }
+        }
+
+        // TODO what about rows?
+
         dbg!(new_u32s_per_row, new_u32s_total);
         match [new_u32s_per_row, new_u32s_total] {
             [None, None] => { /* do nothing */ }
             [None, Some(new_u32s_total)] => {
-                // realloc only!
+                // realloc only! column alignment is still OK
                 // assert!(new_u32s_total > self.u32s_total);
                 let old_layout = Self::layout_for(self.u32s_total);
                 let new_layout = Self::layout_for(new_u32s_total);
@@ -732,7 +761,7 @@ impl FlagMatrix {
         }
     }
     fn new(dims: [usize; 2], extra_dim_space: [usize; 2]) -> Self {
-        let u32s_per_row = ceiling_to_mul_32(dims[1] + extra_dim_space[1]) / 32; // HALF dead columns
+        let u32s_per_row = ceiling_to_mul_32(dims[1] + extra_dim_space[1]) / 32;
         let u32s_total = u32s_per_row * (dims[0] + extra_dim_space[0]);
         let layout = Self::layout_for(u32s_total);
         let bytes = unsafe {
@@ -749,28 +778,28 @@ impl FlagMatrix {
         assert!(at[1] < self.dims[1]);
     }
     #[inline(always)]
-    fn add_of_chunk_unchecked(&self, at: [usize; 2]) -> usize {
+    fn offset_of_chunk_unchecked(&self, at: [usize; 2]) -> usize {
         (self.u32s_per_row * at[0]) + at[1] / 32
     }
     #[inline(always)]
-    fn adds_unchecked(&self, at: [usize; 2]) -> [usize; 2] {
-        let of_chunk = self.add_of_chunk_unchecked(at);
+    fn offsets_unchecked(&self, at: [usize; 2]) -> [usize; 2] {
+        let of_chunk = self.offset_of_chunk_unchecked(at);
         let in_chunk = at[1] % 32;
         [of_chunk, in_chunk]
     }
     fn set(&mut self, at: [usize; 2]) {
         self.assert_within_bounds(at);
-        let [o_of, o_in] = self.adds_unchecked(at);
+        let [o_of, o_in] = self.offsets_unchecked(at);
         unsafe { *self.bytes.add(o_of) |= 1 << o_in };
     }
     fn unset(&mut self, at: [usize; 2]) {
         self.assert_within_bounds(at);
-        let [o_of, o_in] = self.adds_unchecked(at);
+        let [o_of, o_in] = self.offsets_unchecked(at);
         unsafe { *self.bytes.add(o_of) &= !(1 << o_in) };
     }
     fn test(&self, at: [usize; 2]) -> bool {
         self.assert_within_bounds(at);
-        let [o_of, o_in] = self.adds_unchecked(at);
+        let [o_of, o_in] = self.offsets_unchecked(at);
         unsafe { *self.bytes.add(o_of) & (1 << o_in) != 0 }
     }
     unsafe fn copy_chunk_unchecked(&self, row: usize, col_chunk_index: usize) -> u32 {
@@ -778,29 +807,33 @@ impl FlagMatrix {
         *self.bytes.add(o_of)
     }
 
-    // return an efficient interator over column indices c in the range 0..self.dims[1]
-    // where self.test([t_row, c]) && f_rows.iter().all(|&f_row| !self.test([f_row, c]))
+    /// return an efficient interator over column indices c in the range 0..self.dims[1]
+    /// where self.test([t_row, c]) && f_rows.iter().all(|&f_row| !self.test([f_row, c]))
     fn col_iter_t1fn<'a, 'b: 'a>(
         &'a self,
         t_row: usize,
         f_rows: &'b [usize],
     ) -> impl Iterator<Item = usize> + 'a {
-        // 1. do all bounds checks
+        // 1. ensure all ROWS indices are in range.
         assert!(t_row < self.dims[0]);
-        for &row in f_rows.iter() {
-            assert!(row < self.dims[0]);
+        for &f_row in f_rows.iter() {
+            assert!(f_row < self.dims[0]);
         }
 
         // 2. construct an unsafe iterator over chunks
-        let chunk_iter = (0..self.u32s_per_row).map(move |col_chunk_index| {
+        // column_chunk_range ensures all col_chunk_index values are in range.
+        let column_chunk_range = 0..ceiling_to_mul_32(self.dims[1]) / 32;
+        let chunk_iter = column_chunk_range.map(move |col_chunk_index| {
+            // SAFETY: all rows and columns have already been bounds-checked.
             let t_chunk = unsafe { self.copy_chunk_unchecked(t_row, col_chunk_index) };
             f_rows.iter().fold(t_chunk, |chunk, &f_row| {
                 let f_chunk = unsafe { self.copy_chunk_unchecked(f_row, col_chunk_index) };
                 chunk & !f_chunk
             })
         });
-        // 3. return an unsafe iterator over column indices
-        BitChunkIter::new(chunk_iter).filter(move |&x| x < self.dims[1])
+
+        // 3. yield columns indices from the chunk iterator
+        BitChunkIter::new(chunk_iter)
     }
 }
 
