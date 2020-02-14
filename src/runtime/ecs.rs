@@ -75,55 +75,69 @@ impl BitSet {
     }
 }
 
+/// Converts an iterator over contiguous u32 chunks into an iterator over usize
+/// e.g. input [0b111000, 0b11] gives output [3, 4, 5, 32, 33]
+/// observe that the bits per chunk are ordered from least to most significant bits, yielding smaller to larger usizes.
+/// works by draining the inner u32 chunk iterator one u32 at a time, then draining that chunk until its 0.
 struct BitChunkIter<I: Iterator<Item = u32>> {
     chunk_iter: I,
     next_bit_index: usize,
-    cached: Option<u32>, // None <=> iterator is done
+    cached: u32,
 }
 
 impl<I: Iterator<Item = u32>> BitChunkIter<I> {
-    fn new(mut chunk_iter: I) -> Self {
-        let cached = chunk_iter.next();
-        Self { chunk_iter, next_bit_index: 0, cached }
+    fn new(chunk_iter: I) -> Self {
+        // first chunk is always a dummy zero, as if chunk_iter yielded Some(0).
+        // Consequences:
+        // 1. our next_bit_index is always off by 32 (we correct for it in Self::next) (no additional overhead)
+        // 2. we don't need to ever cache an Option. We can encounter them in Self::next.
+        Self { chunk_iter, next_bit_index: 0, cached: 0 }
     }
 }
 impl<I: Iterator<Item = u32>> Iterator for BitChunkIter<I> {
     type Item = usize;
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            println!("LOOP");
-            // get cached chunk. If none exists, iterator is done.
-            let mut chunk = self.cached?;
-            if chunk == 0 {
-                // self.next_bit_index jumps to next multiple of 32
-                self.next_bit_index = (self.next_bit_index + 32) & !(32 - 1);
-                self.cached = self.chunk_iter.next();
-                continue;
-            }
-            // this chunk encodes 1+ Items to yield
-            // shift the contents of chunk until the least significant bit is 1
+        let mut chunk = self.cached;
 
-            #[inline(always)]
-            fn shifty(chunk: &mut u32, shift_by: usize, next_bit_index: &mut usize) {
-                if *chunk & ((1 << shift_by) - 1) == 0 {
-                    *next_bit_index += shift_by;
-                    *chunk >>= shift_by;
-                }
-                println!("{:#032b}", *chunk);
-            }
-            shifty(&mut chunk, 16, &mut self.next_bit_index);
-            shifty(&mut chunk, 08, &mut self.next_bit_index);
-            shifty(&mut chunk, 04, &mut self.next_bit_index);
-            shifty(&mut chunk, 02, &mut self.next_bit_index);
-            shifty(&mut chunk, 01, &mut self.next_bit_index);
-            // assert(chunk & 1 == 1)
+        // loop until either:
+        // 1. there are no more Items to return, or
+        // 2. chunk encodes 1+ Items, one of which we will return.
+        while chunk == 0 {
+            // chunk is still empty! get the next one...
+            chunk = self.chunk_iter.next()?;
 
-            self.next_bit_index += 1;
-            self.cached = Some(chunk >> 1);
-            if chunk > 0 {
-                return Some(self.next_bit_index - 1);
-            }
+            // ... and jump self.next_bit_index to the next multiple of 32.
+            self.next_bit_index = (self.next_bit_index + 32) & !(32 - 1);
         }
+        // assert(chunk > 0);
+
+        // Shift the contents of chunk until the least significant bit is 1.
+        // ... being sure to increment next_bit_index accordingly.
+        #[inline(always)]
+        fn shift_and_inc(chunk: &mut u32, shift_by: usize, next_bit_index: &mut usize) {
+            if *chunk & ((1 << shift_by) - 1) == 0 {
+                *next_bit_index += shift_by;
+                *chunk >>= shift_by;
+            }
+            // println!("{:#032b}", *chunk);
+        }
+        shift_and_inc(&mut chunk, 16, &mut self.next_bit_index);
+        shift_and_inc(&mut chunk, 08, &mut self.next_bit_index);
+        shift_and_inc(&mut chunk, 04, &mut self.next_bit_index);
+        shift_and_inc(&mut chunk, 02, &mut self.next_bit_index);
+        shift_and_inc(&mut chunk, 01, &mut self.next_bit_index);
+        // least significant bit of chunk is 1.
+        // assert(chunk & 1 == 1)
+
+        // prepare our state for the next time Self::next is called.
+        // Overwrite self.cached such that its shifted state is retained,
+        // and jump over the bit whose index we are about to return.
+        self.next_bit_index += 1;
+        self.cached = chunk >> 1;
+
+        // returned index is 32 smaller than self.next_bit_index because we use an
+        // off-by-32 encoding to avoid having to cache an Option<u32>.
+        Some(self.next_bit_index - 1 - 32)
     }
 }
 
