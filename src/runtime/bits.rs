@@ -4,22 +4,22 @@ use crate::common::*;
 /// e.g. input [0b111000, 0b11] gives output [3, 4, 5, 32, 33]
 /// observe that the bits per chunk are ordered from least to most significant bits, yielding smaller to larger usizes.
 /// works by draining the inner u32 chunk iterator one u32 at a time, then draining that chunk until its 0.
-struct BitChunkIter<I: Iterator<Item = u32>> {
+struct BitChunkIter<I: Iterator<Item = BitChunk>> {
     chunk_iter: I,
     next_bit_index: u32,
-    cached: u32,
+    cached: BitChunk,
 }
 
-impl<I: Iterator<Item = u32>> BitChunkIter<I> {
+impl<I: Iterator<Item = BitChunk>> BitChunkIter<I> {
     fn new(chunk_iter: I) -> Self {
         // first chunk is always a dummy zero, as if chunk_iter yielded Some(0).
         // Consequences:
         // 1. our next_bit_index is always off by 32 (we correct for it in Self::next) (no additional overhead)
         // 2. we cache u32 and not Option<u32>, because chunk_iter.next() is only called in Self::next.
-        Self { chunk_iter, next_bit_index: 0, cached: 0 }
+        Self { chunk_iter, next_bit_index: 0, cached: BitChunk(0) }
     }
 }
-impl<I: Iterator<Item = u32>> Iterator for BitChunkIter<I> {
+impl<I: Iterator<Item = BitChunk>> Iterator for BitChunkIter<I> {
     type Item = u32;
     fn next(&mut self) -> Option<Self::Item> {
         let mut chunk = self.cached;
@@ -27,30 +27,31 @@ impl<I: Iterator<Item = u32>> Iterator for BitChunkIter<I> {
         // loop until either:
         // 1. there are no more Items to return, or
         // 2. chunk encodes 1+ Items, one of which we will return.
-        while chunk == 0 {
+        while !chunk.any() {
             // chunk is still empty! get the next one...
             chunk = self.chunk_iter.next()?;
 
-            // ... and jump self.next_bit_index to the next multiple of 32.
-            self.next_bit_index = (self.next_bit_index + 32) & !(32 - 1);
+            // ... and jump self.next_bit_index to the next multiple of BitChunk::chunk_bits().
+            self.next_bit_index =
+                (self.next_bit_index + BitChunk::bits() as u32) & !(BitChunk::bits() as u32 - 1);
         }
         // assert(chunk > 0);
 
         // Shift the contents of chunk until the least significant bit is 1.
         // ... being sure to increment next_bit_index accordingly.
         #[inline(always)]
-        fn skip_n_zeroes(chunk: &mut u32, n: u32, next_bit_index: &mut u32) {
-            if *chunk & ((1 << n) - 1) == 0 {
+        fn skip_n_zeroes(chunk: &mut BitChunk, n: u32, next_bit_index: &mut u32) {
+            if chunk.0 & ((1 << n) - 1) == 0 {
                 // n least significant bits are zero. skip n bits.
                 *next_bit_index += n;
-                *chunk >>= n;
+                chunk.0 >>= n;
             }
         }
-        skip_n_zeroes(&mut chunk, 16, &mut self.next_bit_index);
-        skip_n_zeroes(&mut chunk, 08, &mut self.next_bit_index);
-        skip_n_zeroes(&mut chunk, 04, &mut self.next_bit_index);
-        skip_n_zeroes(&mut chunk, 02, &mut self.next_bit_index);
-        skip_n_zeroes(&mut chunk, 01, &mut self.next_bit_index);
+        let mut n = std::mem::size_of::<usize>() as u32 * 8 / 2;
+        while n >= 1 {
+            skip_n_zeroes(&mut chunk, n, &mut self.next_bit_index);
+            n /= 2;
+        }
         // least significant bit of chunk is 1.
         // assert(chunk & 1 == 1)
 
@@ -58,11 +59,11 @@ impl<I: Iterator<Item = u32>> Iterator for BitChunkIter<I> {
         // Overwrite self.cached such that its shifted state is retained,
         // and jump over the bit whose index we are about to return.
         self.next_bit_index += 1;
-        self.cached = chunk >> 1;
+        self.cached = BitChunk(chunk.0 >> 1);
 
-        // returned index is 32 smaller than self.next_bit_index because we use an
-        // off-by-32 encoding to avoid having to cache an Option<u32>.
-        Some(self.next_bit_index - 1 - 32)
+        // returned index is BitChunk::bits() smaller than self.next_bit_index because we use an
+        // off-by-BitChunk::bits() encoding to avoid having to cache an Option<BitChunk>.
+        Some(self.next_bit_index - 1 - BitChunk::bits() as u32)
     }
 }
 
@@ -74,7 +75,7 @@ impl<I: Iterator<Item = u32>> Iterator for BitChunkIter<I> {
   | |___|___|___|___|
   |
   V
- entity chunks (groups of 32)
+ entity chunks (groups of BitChunk::bits())
 */
 
 // TODO newtypes Entity and Property
@@ -91,12 +92,12 @@ impl From<[u32; 2]> for Pair {
 }
 struct BitMatrix {
     bounds: Pair,
-    buffer: *mut u32,
+    buffer: *mut BitChunk,
 }
 impl Drop for BitMatrix {
     fn drop(&mut self) {
-        let total_chunks = Self::row_chunks(self.bounds.property) as usize
-            * Self::column_chunks(self.bounds.entity) as usize;
+        let total_chunks = Self::row_chunks(self.bounds.property as usize)
+            * Self::column_chunks(self.bounds.entity as usize);
         let layout = Self::layout_for(total_chunks);
         unsafe {
             // ?
@@ -106,21 +107,24 @@ impl Drop for BitMatrix {
 }
 impl Debug for BitMatrix {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        let row_chunks = Self::row_chunks(self.bounds.property) as usize;
-        let column_chunks = Self::column_chunks(self.bounds.entity) as usize;
+        let row_chunks = Self::row_chunks(self.bounds.property as usize);
+        let column_chunks = Self::column_chunks(self.bounds.entity as usize);
         for property in 0..row_chunks {
             for entity_chunk in 0..column_chunks {
                 write!(f, "|")?;
                 let mut chunk = unsafe { *self.buffer.add(row_chunks * entity_chunk + property) };
-                let end =
-                    if entity_chunk + 1 == column_chunks { self.bounds.entity % 32 } else { 32 };
+                let end = if entity_chunk + 1 == column_chunks {
+                    self.bounds.entity % BitChunk::bits() as u32
+                } else {
+                    BitChunk::bits() as u32
+                };
                 for _ in 0..end {
-                    let c = match chunk & 1 {
+                    let c = match chunk.0 & 1 {
                         0 => '0',
                         _ => '1',
                     };
                     write!(f, "{}", c)?;
-                    chunk >>= 1;
+                    chunk.0 >>= 1;
                 }
             }
             write!(f, "|\n")?;
@@ -130,27 +134,27 @@ impl Debug for BitMatrix {
 }
 impl BitMatrix {
     #[inline]
-    fn ceiling_to_mul_32(value: u32) -> u32 {
-        (value + 31) & !31
+    const fn chunk_len_ceil(value: usize) -> usize {
+        (value + BitChunk::bits() - 1) & !(BitChunk::bits() - 1)
     }
     #[inline]
-    fn row_of(entity: u32) -> u32 {
-        entity / 32
+    const fn row_of(entity: usize) -> usize {
+        entity / BitChunk::bits()
     }
     #[inline]
-    fn row_chunks(property_bound: u32) -> u32 {
+    const fn row_chunks(property_bound: usize) -> usize {
         property_bound
     }
     #[inline]
-    fn column_chunks(entity_bound: u32) -> u32 {
-        Self::ceiling_to_mul_32(entity_bound) / 32
+    const fn column_chunks(entity_bound: usize) -> usize {
+        Self::chunk_len_ceil(entity_bound) / BitChunk::bits()
     }
     #[inline]
     fn offsets_unchecked(&self, at: Pair) -> [usize; 2] {
-        let o_in = at.entity as usize % 32;
-        let row = Self::row_of(at.entity);
-        let row_chunks = self.bounds.property;
-        let o_of = row as usize * row_chunks as usize + at.property as usize;
+        let o_in = at.entity as usize % BitChunk::bits();
+        let row = Self::row_of(at.entity as usize);
+        let row_chunks = self.bounds.property as usize;
+        let o_of = row * row_chunks + at.property as usize;
         [o_of, o_in]
     }
     // returns a u32 which has bits 000...000111...111
@@ -159,31 +163,46 @@ impl BitMatrix {
     // None is returned,
     // otherwise Some(x) is returned such that x & chunk would mask out
     // the bits NOT in 0..entity_bound
-    fn last_row_chunk_mask(entity_bound: u32) -> Option<u32> {
-        let zero_prefix_len = entity_bound % 32;
+    fn last_row_chunk_mask(entity_bound: u32) -> Option<BitChunk> {
+        let zero_prefix_len = entity_bound as usize % BitChunk::bits();
         if zero_prefix_len == 0 {
             None
         } else {
-            Some(!0u32 >> (32 - zero_prefix_len))
+            Some(BitChunk(!0 >> (BitChunk::bits() - zero_prefix_len)))
         }
     }
     fn assert_within_bounds(&self, at: Pair) {
         assert!(at.entity < self.bounds.entity);
         assert!(at.property < self.bounds.property);
     }
+
+    fn layout_for(mut total_chunks: usize) -> std::alloc::Layout {
+        unsafe {
+            // this layout is ALWAYS valid:
+            // 1. size is always nonzero
+            // 2. size is always a multiple of 4 and 4-aligned
+            if total_chunks == 0 {
+                total_chunks = 1;
+            }
+            std::alloc::Layout::from_size_align_unchecked(
+                BitChunk::bytes() * total_chunks,
+                BitChunk::bytes(),
+            )
+        }
+    }
     /////////
 
-    fn reshape(&mut self, dims: [usize; 2]) {
+    fn reshape(&mut self, bounds: Pair) {
         todo!()
     }
 
     fn new(bounds: Pair) -> Self {
-        let total_chunks = Self::row_chunks(bounds.property) as usize
-            * Self::column_chunks(bounds.entity) as usize;
+        let total_chunks = Self::row_chunks(bounds.property as usize)
+            * Self::column_chunks(bounds.entity as usize);
         let layout = Self::layout_for(total_chunks);
         let buffer;
         unsafe {
-            buffer = std::alloc::alloc(layout) as *mut u32;
+            buffer = std::alloc::alloc(layout) as *mut BitChunk;
             buffer.write_bytes(0u8, total_chunks);
         };
         Self { buffer, bounds }
@@ -191,22 +210,22 @@ impl BitMatrix {
     fn set(&mut self, at: Pair) {
         self.assert_within_bounds(at);
         let [o_of, o_in] = self.offsets_unchecked(at);
-        unsafe { *self.buffer.add(o_of) |= 1 << o_in };
+        unsafe { *self.buffer.add(o_of) |= BitChunk(1 << o_in) };
     }
     fn unset(&mut self, at: Pair) {
         self.assert_within_bounds(at);
         let [o_of, o_in] = self.offsets_unchecked(at);
-        unsafe { *self.buffer.add(o_of) &= !(1 << o_in) };
+        unsafe { *self.buffer.add(o_of) &= !BitChunk(1 << o_in) };
     }
     fn test(&self, at: Pair) -> bool {
         self.assert_within_bounds(at);
         let [o_of, o_in] = self.offsets_unchecked(at);
-        unsafe { (*self.buffer.add(o_of) & 1 << o_in) != 0 }
+        unsafe { (*self.buffer.add(o_of) & BitChunk(1 << o_in)).any() }
     }
 
     fn batch_mut<'a, 'b>(&mut self, mut chunk_mut_fn: impl FnMut(&'b mut [BitChunk])) {
-        let row_chunks = Self::row_chunks(self.bounds.property) as usize;
-        let column_chunks = Self::column_chunks(self.bounds.entity);
+        let row_chunks = Self::row_chunks(self.bounds.property as usize);
+        let column_chunks = Self::column_chunks(self.bounds.entity as usize);
         let mut ptr = self.buffer;
         for _row in 0..column_chunks {
             let slice;
@@ -236,12 +255,12 @@ impl BitMatrix {
     ///    and returning a new derived property (working )
     fn iter_entities_where<'a, 'b>(
         &'a self,
-        buf: &'b mut Vec<u32>,
+        buf: &'b mut Vec<BitChunk>,
         mut fold_fn: impl FnMut(&'b [BitChunk]) -> BitChunk,
-    ) -> BitChunkIter<std::vec::Drain<'b, u32>> {
+    ) -> BitChunkIter<std::vec::Drain<'b, BitChunk>> {
         let buf_start = buf.len();
-        let row_chunks = Self::row_chunks(self.bounds.property) as usize;
-        let column_chunks = Self::column_chunks(self.bounds.entity);
+        let row_chunks = Self::row_chunks(self.bounds.property as usize);
+        let column_chunks = Self::column_chunks(self.bounds.entity as usize);
         let mut ptr = self.buffer;
         for _row in 0..column_chunks {
             let slice;
@@ -250,56 +269,81 @@ impl BitMatrix {
                 slice = std::mem::transmute(slicey);
                 ptr = ptr.add(row_chunks);
             }
-            buf.push(fold_fn(slice).0);
+            buf.push(fold_fn(slice));
         }
         if let Some(mask) = Self::last_row_chunk_mask(self.bounds.entity) {
             *buf.iter_mut().last().unwrap() &= mask;
         }
         BitChunkIter::new(buf.drain(buf_start..))
     }
-
-    fn layout_for(total_chunks: usize) -> std::alloc::Layout {
-        unsafe {
-            // this layout is ALWAYS valid:
-            // 1. size is always nonzero
-            // 2. size is always a multiple of 4 and 4-aligned
-            std::alloc::Layout::from_size_align_unchecked(4 * total_chunks.max(1), 4)
-        }
-    }
 }
 
-// TODO newtypes for:
-// 1. BitChunk(u32) for fold fn
-// 1. Entity(u32) and Property(u32)
-
 use derive_more::*;
-#[derive(Copy, Clone, BitAnd, Not, BitOr, BitXor, BitAndAssign, BitOrAssign, BitXorAssign)]
-struct BitChunk(u32);
+#[derive(
+    Debug, Copy, Clone, BitAnd, Not, BitOr, BitXor, BitAndAssign, BitOrAssign, BitXorAssign,
+)]
+struct BitChunk(usize);
+impl BitChunk {
+    const fn bits() -> usize {
+        Self::bytes() * 8
+    }
+    const fn bytes() -> usize {
+        std::mem::size_of::<Self>()
+    }
+    const fn any(self) -> bool {
+        self.0 != FALSE.0
+    }
+    const fn all(self) -> bool {
+        self.0 == TRUE.0
+    }
+}
 const TRUE: BitChunk = BitChunk(!0);
 const FALSE: BitChunk = BitChunk(0);
 
 #[test]
 fn matrix_test() {
-    let mut m = BitMatrix::new(Pair { entity: 50, property: 3 });
+    let mut m = BitMatrix::new(Pair { entity: 70, property: 3 });
     m.set([2, 0].into());
     m.set([40, 1].into());
     m.set([40, 2].into());
     m.set([40, 0].into());
     println!("{:?}", &m);
 
-    m.batch_mut(|p| {
-        p[0] = FALSE | p[1];
-        p[2] ^= TRUE;
-    });
+    m.batch_mut(|p| p[0] = TRUE);
+    println!("{:?}", &m);
+
+    for i in (0..70).step_by(7) {
+        m.unset([i, 0].into());
+    }
+    println!("{:?}", &m);
+
+    m.batch_mut(move |p| p[1] = p[0] ^ TRUE);
     println!("{:?}", &m);
 
     let mut buf = vec![];
-    for index in m.iter_entities_where(&mut buf, move |p| TRUE ^ p[1] ^ p[2]) {
-        println!("index {}", index);
-    }
-    for index in m.iter_entities_where(&mut buf, move |p| p[0] & !p[2]) {
+    for index in m.iter_entities_where(&mut buf, move |p| p[1]) {
         println!("index {}", index);
     }
 }
 
-// TODO something still a bit screwy with 1s where theere should be zeroes
+/*
+TODO
+1. BitChunk newtype in matrix and bit iterator
+2. make BitChunk a wrapper around usize, using mem::size_of for the shifting
+
+    #[inline(always)]
+    fn skip_n_zeroes(chunk: &mut usize, n: usize) {
+        if *chunk & ((1 << n) - 1) == 0 {
+            *chunk >>= n;
+        }
+    }
+    let mut n = std::mem::size_of::<usize>() * 8 / 2;
+    while n > 1 {
+        if x & ((1 << n) - 1) == 0 {
+            x >>= n;
+        }
+        n /= 2;
+    }
+
+
+*/
