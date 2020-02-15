@@ -874,6 +874,20 @@ impl FlagMatrix {
     }
 }
 
+// trait RwMatrixBits {
+//     fn set(&mut self, at: [usize;2]);
+//     fn unset(&mut self, at: [usize;2]);
+//     fn set_entire_row(&mut self, row: usize);
+//     fn unset_entire_row(&mut self, row: usize);
+// }
+
+// struct MatrixRefW<'a> {
+//     _inner: usize,
+// }
+// impl<'a> MatrixRefW<'a> {
+
+// }
+
 #[test]
 fn matrix() {
     let mut m = FlagMatrix::new([6, 6], [0, 0]);

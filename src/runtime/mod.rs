@@ -1,13 +1,16 @@
 #[cfg(feature = "ffi")]
 pub mod ffi;
 
+// EXPERIMENTAL:
+// mod predicate; // TODO later
+// mod ecs;
+mod bits;
+
 mod actors;
 pub(crate) mod communication;
 pub(crate) mod connector;
 pub(crate) mod endpoint;
 pub mod errors;
-// mod predicate; // TODO later
-mod ecs;
 mod serde;
 pub(crate) mod setup;
 
