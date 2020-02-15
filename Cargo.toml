@@ -11,6 +11,7 @@ edition = "2018"
 # hibitset = "0.6.2"
 
 # runtime stuff
+derive_more = "0.99.2"
 getrandom = "0.1.14" # tiny crate. used to guess controller-id
 take_mut = "0.2.2"
 maplit = "1.0.2" # convenience macros

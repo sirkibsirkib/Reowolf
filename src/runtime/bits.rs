@@ -204,14 +204,15 @@ impl BitMatrix {
         unsafe { (*self.buffer.add(o_of) & 1 << o_in) != 0 }
     }
 
-    fn batch_mut<'a, 'b>(&mut self, mut chunk_mut_fn: impl FnMut(&'b mut [u32])) {
+    fn batch_mut<'a, 'b>(&mut self, mut chunk_mut_fn: impl FnMut(&'b mut [BitChunk])) {
         let row_chunks = Self::row_chunks(self.bounds.property) as usize;
         let column_chunks = Self::column_chunks(self.bounds.entity);
         let mut ptr = self.buffer;
         for _row in 0..column_chunks {
             let slice;
             unsafe {
-                slice = std::slice::from_raw_parts_mut(ptr, row_chunks);
+                let slicey = std::slice::from_raw_parts_mut(ptr, row_chunks);
+                slice = std::mem::transmute(slicey);
                 ptr = ptr.add(row_chunks);
             }
             chunk_mut_fn(slice);
@@ -229,11 +230,15 @@ impl BitMatrix {
         }
     }
 
+    /// given:
+    /// 1. a buffer to work with
+    /// 2. a _fold function_ for combining the properties of a given entity
+    ///    and returning a new derived property (working )
     fn iter_entities_where<'a, 'b>(
         &'a self,
         buf: &'b mut Vec<u32>,
-        mut fold_fn: impl FnMut(&'b [u32]) -> u32,
-    ) -> impl Iterator<Item = u32> + 'b {
+        mut fold_fn: impl FnMut(&'b [BitChunk]) -> BitChunk,
+    ) -> BitChunkIter<std::vec::Drain<'b, u32>> {
         let buf_start = buf.len();
         let row_chunks = Self::row_chunks(self.bounds.property) as usize;
         let column_chunks = Self::column_chunks(self.bounds.entity);
@@ -241,10 +246,11 @@ impl BitMatrix {
         for _row in 0..column_chunks {
             let slice;
             unsafe {
-                slice = std::slice::from_raw_parts(ptr, row_chunks);
+                let slicey = std::slice::from_raw_parts(ptr, row_chunks);
+                slice = std::mem::transmute(slicey);
                 ptr = ptr.add(row_chunks);
             }
-            buf.push(fold_fn(slice));
+            buf.push(fold_fn(slice).0);
         }
         if let Some(mask) = Self::last_row_chunk_mask(self.bounds.entity) {
             *buf.iter_mut().last().unwrap() &= mask;
@@ -262,6 +268,16 @@ impl BitMatrix {
     }
 }
 
+// TODO newtypes for:
+// 1. BitChunk(u32) for fold fn
+// 1. Entity(u32) and Property(u32)
+
+use derive_more::*;
+#[derive(Copy, Clone, BitAnd, Not, BitOr, BitXor, BitAndAssign, BitOrAssign, BitXorAssign)]
+struct BitChunk(u32);
+const TRUE: BitChunk = BitChunk(!0);
+const FALSE: BitChunk = BitChunk(0);
+
 #[test]
 fn matrix_test() {
     let mut m = BitMatrix::new(Pair { entity: 50, property: 3 });
@@ -271,14 +287,17 @@ fn matrix_test() {
     m.set([40, 0].into());
     println!("{:?}", &m);
 
-    m.batch_mut(|p| p[0] = !0);
+    m.batch_mut(|p| {
+        p[0] = FALSE | p[1];
+        p[2] ^= TRUE;
+    });
     println!("{:?}", &m);
 
     let mut buf = vec![];
-    for index in m.iter_entities_where(&mut buf, move |p| p[0] ^ p[1] ^ p[2]) {
+    for index in m.iter_entities_where(&mut buf, move |p| TRUE ^ p[1] ^ p[2]) {
         println!("index {}", index);
     }
-    for index in m.iter_entities_where(&mut buf, move |p| (p[0] | p[1]) & p[2]) {
+    for index in m.iter_entities_where(&mut buf, move |p| p[0] & !p[2]) {
         println!("index {}", index);
     }
 }
