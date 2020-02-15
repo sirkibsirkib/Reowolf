@@ -6,7 +6,7 @@ use crate::common::*;
 /// works by draining the inner u32 chunk iterator one u32 at a time, then draining that chunk until its 0.
 struct BitChunkIter<I: Iterator<Item = u32>> {
     chunk_iter: I,
-    next_bit_index: usize,
+    next_bit_index: u32,
     cached: u32,
 }
 
@@ -20,7 +20,7 @@ impl<I: Iterator<Item = u32>> BitChunkIter<I> {
     }
 }
 impl<I: Iterator<Item = u32>> Iterator for BitChunkIter<I> {
-    type Item = usize;
+    type Item = u32;
     fn next(&mut self) -> Option<Self::Item> {
         let mut chunk = self.cached;
 
@@ -39,7 +39,7 @@ impl<I: Iterator<Item = u32>> Iterator for BitChunkIter<I> {
         // Shift the contents of chunk until the least significant bit is 1.
         // ... being sure to increment next_bit_index accordingly.
         #[inline(always)]
-        fn skip_n_zeroes(chunk: &mut u32, n: usize, next_bit_index: &mut usize) {
+        fn skip_n_zeroes(chunk: &mut u32, n: u32, next_bit_index: &mut u32) {
             if *chunk & ((1 << n) - 1) == 0 {
                 // n least significant bits are zero. skip n bits.
                 *next_bit_index += n;
@@ -76,6 +76,9 @@ impl<I: Iterator<Item = u32>> Iterator for BitChunkIter<I> {
   V
  entity chunks (groups of 32)
 */
+
+// TODO newtypes Entity and Property
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 struct Pair {
     entity: u32,
@@ -161,7 +164,7 @@ impl BitMatrix {
         if zero_prefix_len == 0 {
             None
         } else {
-            Some(!0u32 >> zero_prefix_len)
+            Some(!0u32 >> (32 - zero_prefix_len))
         }
     }
     fn assert_within_bounds(&self, at: Pair) {
@@ -201,11 +204,36 @@ impl BitMatrix {
         unsafe { (*self.buffer.add(o_of) & 1 << o_in) != 0 }
     }
 
-    fn iter<'a, 'b>(
+    fn batch_mut<'a, 'b>(&mut self, mut chunk_mut_fn: impl FnMut(&'b mut [u32])) {
+        let row_chunks = Self::row_chunks(self.bounds.property) as usize;
+        let column_chunks = Self::column_chunks(self.bounds.entity);
+        let mut ptr = self.buffer;
+        for _row in 0..column_chunks {
+            let slice;
+            unsafe {
+                slice = std::slice::from_raw_parts_mut(ptr, row_chunks);
+                ptr = ptr.add(row_chunks);
+            }
+            chunk_mut_fn(slice);
+        }
+        if let Some(mask) = Self::last_row_chunk_mask(self.bounds.entity) {
+            // TODO TEST
+            let mut ptr =
+                unsafe { self.buffer.add((column_chunks - 1) as usize * row_chunks as usize) };
+            for _ in 0..row_chunks {
+                unsafe {
+                    *ptr &= mask;
+                    ptr = ptr.add(1);
+                }
+            }
+        }
+    }
+
+    fn iter_entities_where<'a, 'b>(
         &'a self,
         buf: &'b mut Vec<u32>,
         mut fold_fn: impl FnMut(&'b [u32]) -> u32,
-    ) -> impl Iterator<Item = usize> + 'b {
+    ) -> impl Iterator<Item = u32> + 'b {
         let buf_start = buf.len();
         let row_chunks = Self::row_chunks(self.bounds.property) as usize;
         let column_chunks = Self::column_chunks(self.bounds.entity);
@@ -243,8 +271,16 @@ fn matrix_test() {
     m.set([40, 0].into());
     println!("{:?}", &m);
 
+    m.batch_mut(|p| p[0] = !0);
+    println!("{:?}", &m);
+
     let mut buf = vec![];
-    for index in m.iter(&mut buf, move |slice| slice[0] ^ slice[1] ^ slice[2]) {
+    for index in m.iter_entities_where(&mut buf, move |p| p[0] ^ p[1] ^ p[2]) {
+        println!("index {}", index);
+    }
+    for index in m.iter_entities_where(&mut buf, move |p| (p[0] | p[1]) & p[2]) {
         println!("index {}", index);
     }
 }
+
+// TODO something still a bit screwy with 1s where theere should be zeroes
