@@ -1,9 +1,10 @@
 use crate::common::*;
 
-/// Converts an iterator over contiguous u32 chunks into an iterator over usize
-/// e.g. input [0b111000, 0b11] gives output [3, 4, 5, 32, 33]
+/// Given an iterator over BitChunk Items, iterates over the indices (each represented as a u32) for which the bit is SET,
+/// treating the bits in the BitChunk as a contiguous array.
+/// e.g. input [0b111000, 0b11] gives output [3, 4, 5, 32, 33].
 /// observe that the bits per chunk are ordered from least to most significant bits, yielding smaller to larger usizes.
-/// works by draining the inner u32 chunk iterator one u32 at a time, then draining that chunk until its 0.
+/// assumes chunk_iter will yield no more than std::u32::MAX / 32 chunks
 struct BitChunkIter<I: Iterator<Item = BitChunk>> {
     chunk_iter: I,
     next_bit_index: u32,
@@ -12,10 +13,10 @@ struct BitChunkIter<I: Iterator<Item = BitChunk>> {
 
 impl<I: Iterator<Item = BitChunk>> BitChunkIter<I> {
     fn new(chunk_iter: I) -> Self {
-        // first chunk is always a dummy zero, as if chunk_iter yielded Some(0).
+        // first chunk is always a dummy zero, as if chunk_iter yielded Some(FALSE).
         // Consequences:
-        // 1. our next_bit_index is always off by 32 (we correct for it in Self::next) (no additional overhead)
-        // 2. we cache u32 and not Option<u32>, because chunk_iter.next() is only called in Self::next.
+        // 1. our next_bit_index is always off by BitChunk::bits() (we correct for it in Self::next) (no additional overhead)
+        // 2. we cache BitChunk and not Option<BitChunk>, because chunk_iter.next() is only called in Self::next.
         Self { chunk_iter, next_bit_index: 0, cached: BitChunk(0) }
     }
 }
@@ -28,31 +29,35 @@ impl<I: Iterator<Item = BitChunk>> Iterator for BitChunkIter<I> {
         // 1. there are no more Items to return, or
         // 2. chunk encodes 1+ Items, one of which we will return.
         while !chunk.any() {
-            // chunk is still empty! get the next one...
+            // chunk has no bits set! get the next one...
             chunk = self.chunk_iter.next()?;
 
             // ... and jump self.next_bit_index to the next multiple of BitChunk::chunk_bits().
             self.next_bit_index =
                 (self.next_bit_index + BitChunk::bits() as u32) & !(BitChunk::bits() as u32 - 1);
         }
+        // there exists 1+ set bits in chunk
         // assert(chunk > 0);
 
-        // Shift the contents of chunk until the least significant bit is 1.
-        // ... being sure to increment next_bit_index accordingly.
-        #[inline(always)]
-        fn skip_n_zeroes(chunk: &mut BitChunk, n: u32, next_bit_index: &mut u32) {
-            if chunk.0 & ((1 << n) - 1) == 0 {
-                // n least significant bits are zero. skip n bits.
-                *next_bit_index += n;
+        // Until the least significant bit of chunk is 1:
+        // 1. shift chunk to the right,
+        // 2. and increment self.next_bit_index accordingly
+        // effectively performs a little binary search, shifting 32, then 16, ...
+        // TODO perhaps there is a more efficient SIMD op for this?
+        const N_INIT: u32 = BitChunk::bits() as u32 / 2;
+        let mut n = N_INIT;
+        while n >= 1 {
+            // n is [32,16,8,4,2,1] on 64-bit machine
+            // this loop is unrolled with release optimizations
+            let n_least_significant_mask = (1 << n) - 1;
+            if chunk.0 & n_least_significant_mask == 0 {
+                // no 1 set within 0..n least significant bits.
+                self.next_bit_index += n;
                 chunk.0 >>= n;
             }
-        }
-        let mut n = std::mem::size_of::<usize>() as u32 * 8 / 2;
-        while n >= 1 {
-            skip_n_zeroes(&mut chunk, n, &mut self.next_bit_index);
             n /= 2;
         }
-        // least significant bit of chunk is 1.
+        // least significant bit of chunk is 1. Item to return is known.
         // assert(chunk & 1 == 1)
 
         // prepare our state for the next time Self::next is called.
@@ -312,9 +317,10 @@ fn matrix_test() {
     m.batch_mut(|p| p[0] = TRUE);
     println!("{:?}", &m);
 
-    for i in (0..70).step_by(7) {
+    for i in (0..40).step_by(7) {
         m.unset([i, 0].into());
     }
+    m.unset([62, 0].into());
     println!("{:?}", &m);
 
     m.batch_mut(move |p| p[1] = p[0] ^ TRUE);
