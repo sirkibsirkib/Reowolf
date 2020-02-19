@@ -6,6 +6,9 @@ use crate::common::*;
 use crate::runtime::{errors::*, PortBinding::*};
 
 static PDL: &[u8] = b"
+primitive forward_once(in i, out o) {
+    synchronous() put(o, get(i));
+}
 primitive blocked(in i, out o) {
     while(true) synchronous {}
 }
