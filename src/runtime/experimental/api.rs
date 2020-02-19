@@ -106,17 +106,24 @@ impl Binds<OutPort> for Connecting {
     }
 }
 impl Connecting {
-    pub fn connect(&mut self, timeout: Option<Duration>) -> Result<Connected, ()> {
+    pub fn connect(&mut self, _timeout: Option<Duration>) -> Result<Connected, ()> {
         let controller_id = 42;
         let channel_index_stream = ChannelIndexStream::default();
-        // drain self if successful
-        todo!()
+        let native_ports = (0..self.bindings.len()).map(|x| Port(x as u32)).collect();
+        self.bindings.clear();
+        Ok(Connected {
+            controller_id,
+            channel_index_stream,
+            components: vec![],
+            endpoint_exts: vec![],
+            native_ports,
+        })
     }
 }
 pub struct Protocol;
 impl Protocol {
     pub fn parse(_pdl_text: &[u8]) -> Result<Self, ()> {
-        todo!()
+        Ok(Protocol)
     }
 }
 struct ComponentExt {
@@ -134,10 +141,8 @@ pub struct Connected {
 impl Connected {
     pub fn new_channel(&mut self) -> (OutPort, InPort) {
         assert!(self.endpoint_exts.len() <= std::u32::MAX as usize - 2);
-        let ports = (
-            OutPort(Port(self.endpoint_exts.len() as u32 - 1)),
-            InPort(Port(self.endpoint_exts.len() as u32)),
-        );
+        let ports =
+            [Port(self.endpoint_exts.len() as u32 - 1), Port(self.endpoint_exts.len() as u32)];
         let channel_id = ChannelId {
             controller_id: self.controller_id,
             channel_index: self.channel_index_stream.next(),
@@ -151,7 +156,10 @@ impl Connected {
             info: EndpointInfo { channel_id, polarity: Getter },
             endpoint: e1,
         });
-        ports
+        for p in ports.iter() {
+            self.native_ports.insert(Port(p.0));
+        }
+        (OutPort(ports[0]), InPort(ports[1]))
     }
     pub fn new_component(
         &mut self,
@@ -168,27 +176,28 @@ impl Connected {
         // TODO add a singleton machine
         Ok(())
     }
-    pub fn sync_set(&mut self, ops: &mut [PortOp]) {
-        todo!()
+    pub fn sync_set(&mut self, _ops: &mut [PortOp]) -> Result<(), ()> {
+        Ok(())
     }
     pub fn sync_subsets(
         &mut self,
         _ops: &mut [PortOp],
         bit_subsets: &[&[usize]],
     ) -> Result<usize, ()> {
-        for &bit_subset in bit_subsets {
+        for (batch_index, bit_subset) in bit_subsets.iter().enumerate() {
+            println!("batch_index {:?}", batch_index);
             use super::bits::BitChunkIter;
             let chunk_iter = bit_subset.iter().copied();
             for index in BitChunkIter::new(chunk_iter) {
-                println!("index {:?}", index);
+                println!("  index {:?}", index);
             }
         }
-        todo!()
+        Ok(0)
     }
 }
 
 #[test]
-fn test() {
+fn api_new_test() {
     let mut c = Connecting::default();
     let net_out: OutPort = c.bind(Coupling::Active, "127.0.0.1:8001".parse().unwrap());
     let net_in: InPort = c.bind(Coupling::Active, "127.0.0.1:8001".parse().unwrap());
@@ -205,4 +214,5 @@ fn test() {
         PortOp::In { port: &mem_in, poll: false, msg: Some(&mut buf) },
     ];
     c.sync_subsets(&mut ops, &[&[0b001], &[0b010], &[0b100]]).unwrap();
+    c.sync_set(&mut ops).unwrap();
 }
