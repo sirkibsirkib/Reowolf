@@ -6,6 +6,10 @@ use crate::runtime::endpoint::EndpointInfo;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+pub enum Polarity {
+    In,
+    Out,
+}
 pub enum Coupling {
     Active,
     Passive,
@@ -47,9 +51,21 @@ impl<'a> From<&'a mut [u8]> for MsgBuffer<'a> {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct Port(pub u32);
-pub struct PortOp<'a> {
-    pub port: Port,
-    pub msg: Option<&'a [u8]>,
+impl From<InPort> for Port {
+    fn from(x: InPort) -> Self {
+        x.0
+    }
+}
+impl From<OutPort> for Port {
+    fn from(x: OutPort) -> Self {
+        x.0
+    }
+}
+pub struct InPort(Port);
+pub struct OutPort(Port);
+pub enum PortOp<'a> {
+    In { port: &'a InPort, poll: bool, msg: Option<&'a mut [u8]> },
+    Out { port: &'a OutPort, offer: bool, msg: Option<&'a [u8]> },
 }
 
 #[derive(Default)]
@@ -72,13 +88,24 @@ enum Connector {
 pub struct Connecting {
     bindings: Vec<Binding>, // invariant: no more than std::u32::MAX entries
 }
-impl Connecting {
-    pub fn bind(&mut self, binding: Binding) -> Port {
-        self.bindings.push(binding);
-        // preserve invariant
+trait Binds<T> {
+    fn bind(&mut self, coupling: Coupling, addr: SocketAddr) -> T;
+}
+impl Binds<InPort> for Connecting {
+    fn bind(&mut self, coupling: Coupling, addr: SocketAddr) -> InPort {
+        self.bindings.push((coupling, Polarity::In, addr).into());
         let pid: u32 = (self.bindings.len() - 1).try_into().expect("Port ID overflow!");
-        Port(pid)
+        InPort(Port(pid))
     }
+}
+impl Binds<OutPort> for Connecting {
+    fn bind(&mut self, coupling: Coupling, addr: SocketAddr) -> OutPort {
+        self.bindings.push((coupling, Polarity::Out, addr).into());
+        let pid: u32 = (self.bindings.len() - 1).try_into().expect("Port ID overflow!");
+        OutPort(Port(pid))
+    }
+}
+impl Connecting {
     pub fn connect(&mut self, timeout: Option<Duration>) -> Result<Connected, ()> {
         let controller_id = 42;
         let channel_index_stream = ChannelIndexStream::default();
@@ -105,10 +132,12 @@ pub struct Connected {
     components: Vec<ComponentExt>,
 }
 impl Connected {
-    pub fn new_channel(&mut self) -> [Port; 2] {
+    pub fn new_channel(&mut self) -> (OutPort, InPort) {
         assert!(self.endpoint_exts.len() <= std::u32::MAX as usize - 2);
-        let ports =
-            [Port(self.endpoint_exts.len() as u32 - 1), Port(self.endpoint_exts.len() as u32)];
+        let ports = (
+            OutPort(Port(self.endpoint_exts.len() as u32 - 1)),
+            InPort(Port(self.endpoint_exts.len() as u32)),
+        );
         let channel_id = ChannelId {
             controller_id: self.controller_id,
             channel_index: self.channel_index_stream.next(),
@@ -149,7 +178,10 @@ impl Connected {
     ) -> Result<usize, ()> {
         for &bit_subset in bit_subsets {
             use super::bits::BitChunkIter;
-            BitChunkIter::new(bit_subset.iter().copied());
+            let chunk_iter = bit_subset.iter().copied();
+            for index in BitChunkIter::new(chunk_iter) {
+                println!("index {:?}", index);
+            }
         }
         todo!()
     }
@@ -158,26 +190,19 @@ impl Connected {
 #[test]
 fn test() {
     let mut c = Connecting::default();
-    let p0 = c.bind(Binding {
-        coupling: Coupling::Active,
-        polarity: Putter,
-        addr: "127.0.0.1:8000".parse().unwrap(),
-    });
-    let p1 = c.bind(Binding {
-        coupling: Coupling::Passive,
-        polarity: Putter,
-        addr: "127.0.0.1:8001".parse().unwrap(),
-    });
-
+    let net_out: OutPort = c.bind(Coupling::Active, "127.0.0.1:8001".parse().unwrap());
+    let net_in: InPort = c.bind(Coupling::Active, "127.0.0.1:8001".parse().unwrap());
     let proto_0 = Arc::new(Protocol::parse(b"").unwrap());
     let mut c = c.connect(None).unwrap();
-    let [p2, p3] = c.new_channel();
-    c.new_component(&proto_0, b"sync".to_vec(), &[p0, p2]).unwrap();
+    let (mem_out, mem_in) = c.new_channel();
+    c.new_component(&proto_0, b"sync".to_vec(), &[net_in.into(), mem_out.into()]).unwrap();
+
+    let mut buf = vec![0; 32];
     let mut ops = [
-        //
-        PortOp { port: p1, msg: Some(b"hi!") },
-        PortOp { port: p1, msg: Some(b"ahoy!") },
-        PortOp { port: p1, msg: Some(b"hello!") },
+        PortOp::Out { port: &net_out, offer: false, msg: Some(b"hi!") },
+        PortOp::Out { port: &net_out, offer: false, msg: Some(b"hey!") },
+        PortOp::Out { port: &net_out, offer: false, msg: Some(b"hello, there!") },
+        PortOp::In { port: &mem_in, poll: false, msg: Some(&mut buf) },
     ];
     c.sync_subsets(&mut ops, &[&[0b001], &[0b010], &[0b100]]).unwrap();
 }
