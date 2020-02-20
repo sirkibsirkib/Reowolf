@@ -6,7 +6,7 @@ pub(crate) mod communication;
 pub(crate) mod connector;
 pub(crate) mod endpoint;
 pub mod errors;
-mod experimental;
+pub mod experimental;
 mod serde;
 pub(crate) mod setup;
 

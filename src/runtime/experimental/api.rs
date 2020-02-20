@@ -50,6 +50,7 @@ impl<'a> From<&'a mut [u8]> for MsgBuffer<'a> {
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[repr(C)]
 pub struct Port(pub u32);
 impl From<InPort> for Port {
     fn from(x: InPort) -> Self {
@@ -63,10 +64,6 @@ impl From<OutPort> for Port {
 }
 pub struct InPort(Port);
 pub struct OutPort(Port);
-pub enum PortOp<'a> {
-    In { port: &'a InPort, poll: bool, msg: Option<&'a mut [u8]> },
-    Out { port: &'a OutPort, offer: bool, msg: Option<&'a [u8]> },
-}
 
 #[derive(Default)]
 struct ChannelIndexStream {
@@ -176,12 +173,13 @@ impl Connected {
         // TODO add a singleton machine
         Ok(())
     }
-    pub fn sync_set(&mut self, _ops: &mut [PortOp]) -> Result<(), ()> {
+    pub fn sync_set(&mut self, _inbuf: &mut [u8], _ops: &mut [PortOpRs]) -> Result<(), ()> {
         Ok(())
     }
     pub fn sync_subsets(
         &mut self,
-        _ops: &mut [PortOp],
+        _inbuf: &mut [u8],
+        _ops: &mut [PortOpRs],
         bit_subsets: &[&[usize]],
     ) -> Result<usize, ()> {
         for (batch_index, bit_subset) in bit_subsets.iter().enumerate() {
@@ -196,23 +194,50 @@ impl Connected {
     }
 }
 
+macro_rules! bitslice {
+    ($( $num:expr  ),*) => {{
+        &[0 $( | (1usize << $num)  )*]
+    }};
+}
+
 #[test]
 fn api_new_test() {
     let mut c = Connecting::default();
-    let net_out: OutPort = c.bind(Coupling::Active, "127.0.0.1:8001".parse().unwrap());
+    let net_out: OutPort = c.bind(Coupling::Active, "127.0.0.1:8000".parse().unwrap());
     let net_in: InPort = c.bind(Coupling::Active, "127.0.0.1:8001".parse().unwrap());
     let proto_0 = Arc::new(Protocol::parse(b"").unwrap());
     let mut c = c.connect(None).unwrap();
     let (mem_out, mem_in) = c.new_channel();
+    let mut inbuf = [0u8; 64];
     c.new_component(&proto_0, b"sync".to_vec(), &[net_in.into(), mem_out.into()]).unwrap();
-
-    let mut buf = vec![0; 32];
     let mut ops = [
-        PortOp::Out { port: &net_out, offer: false, msg: Some(b"hi!") },
-        PortOp::Out { port: &net_out, offer: false, msg: Some(b"hey!") },
-        PortOp::Out { port: &net_out, offer: false, msg: Some(b"hello, there!") },
-        PortOp::In { port: &mem_in, poll: false, msg: Some(&mut buf) },
+        PortOpRs::In { msg_range: None, port: &mem_in },
+        PortOpRs::Out { msg: b"hey", port: &net_out, optional: false },
+        PortOpRs::Out { msg: b"hi?", port: &net_out, optional: true },
+        PortOpRs::Out { msg: b"yo!", port: &net_out, optional: false },
     ];
-    c.sync_subsets(&mut ops, &[&[0b001], &[0b010], &[0b100]]).unwrap();
-    c.sync_set(&mut ops).unwrap();
+    c.sync_set(&mut inbuf, &mut ops).unwrap();
+    c.sync_subsets(&mut inbuf, &mut ops, &[bitslice! {0,1,2}]).unwrap();
+}
+
+#[repr(C)]
+pub struct PortOp {
+    msgbuf: *mut u8,
+    buflen: usize,
+    msglen: usize,
+    optional: bool,
+}
+
+pub enum PortOpRs<'a> {
+    In { msg_range: Option<Range<usize>>, port: &'a InPort },
+    Out { msg: &'a [u8], port: &'a OutPort, optional: bool },
+}
+pub struct InPortOp<'a> {
+    msg_range: Option<Range<usize>>, // written by sync
+    port: &'a InPort,
+}
+pub struct OutPortOp<'a> {
+    msg: &'a [u8],
+    port: &'a OutPort,
+    optional: bool,
 }
