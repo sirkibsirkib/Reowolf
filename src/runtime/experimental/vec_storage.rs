@@ -177,6 +177,7 @@ impl<T> VecStorage<T> {
             i
         } else {
             let bitsets_need_another_chunk = self.data.len() % usize_bits() == 0;
+            // every (usize_bits())th time self.data grows by 1, bitsets grow by usize_bits().
             if bitsets_need_another_chunk {
                 self.vacant.0.push(0usize);
                 self.occupied.0.push(0usize);
