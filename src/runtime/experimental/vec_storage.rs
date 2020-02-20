@@ -1,6 +1,46 @@
+use super::bits::{usize_bits, BitChunkIter};
 use crate::common::*;
 use core::mem::MaybeUninit;
-use std::collections::BTreeSet;
+
+#[derive(Default)]
+struct Bitvec(Vec<usize>);
+impl Bitvec {
+    #[inline(always)]
+    fn offsets_of(i: usize) -> [usize; 2] {
+        [i / usize_bits(), i % usize_bits()]
+    }
+    // assumes read will not go out of bounds
+    unsafe fn insert(&mut self, i: usize) {
+        let [o_of, o_in] = Self::offsets_of(i);
+        let chunk = self.0.get_unchecked_mut(o_of);
+        *chunk |= 1 << o_in;
+    }
+    // assumes read will not go out of bounds
+    unsafe fn remove(&mut self, i: usize) -> bool {
+        let [o_of, o_in] = Self::offsets_of(i);
+        let chunk = self.0.get_unchecked_mut(o_of);
+        let singleton_mask = 1 << o_in;
+        let was = (*chunk & singleton_mask) != 0;
+        *chunk &= !singleton_mask;
+        was
+    }
+    // assumes read will not go out of bounds
+    unsafe fn contains(&self, i: usize) -> bool {
+        let [o_of, o_in] = Self::offsets_of(i);
+        (*self.0.get_unchecked(o_of) & (1 << o_in)) != 0
+    }
+    fn pop_first(&mut self) -> Option<usize> {
+        let i = self.first()?;
+        unsafe { self.remove(i) };
+        Some(i)
+    }
+    fn iter(&self) -> impl Iterator<Item = usize> + '_ {
+        BitChunkIter::new(self.0.iter().copied()).map(|x| x as usize)
+    }
+    fn first(&self) -> Option<usize> {
+        self.iter().next()
+    }
+}
 
 // A T-type arena which:
 // 1. does not check for the ABA problem
@@ -15,10 +55,11 @@ use std::collections::BTreeSet;
 // invariant B: reserved & vacant = {}
 // invariant C: (vacant U reserved) subset of (0..data.len)
 // invariant D: last element of data is not in VACANT state
+// invariant E: number of allocated bits in vacant and reserved >= data.len()
 pub struct VecStorage<T> {
     data: Vec<MaybeUninit<T>>,
-    vacant: BTreeSet<usize>,
-    reserved: BTreeSet<usize>,
+    vacant: Bitvec,
+    reserved: Bitvec,
 }
 impl<T> Default for VecStorage<T> {
     fn default() -> Self {
@@ -42,9 +83,9 @@ impl<T: Debug> Debug for VecStorage<T> {
             }
         }
         let iter = (0..self.data.len()).map(|i| {
-            if self.vacant.contains(&i) {
+            if unsafe { self.vacant.contains(i) } {
                 FmtT::Vacant
-            } else if self.reserved.contains(&i) {
+            } else if unsafe { self.reserved.contains(i) } {
                 FmtT::Reserved
             } else {
                 // 2. Invariant A => reading valid ata
@@ -66,7 +107,7 @@ impl<T> Drop for VecStorage<T> {
 impl<T> VecStorage<T> {
     // ASSUMES that i in 0..self.data.len()
     unsafe fn get_occupied_unchecked(&self, i: usize) -> Option<&T> {
-        if self.vacant.contains(&i) || self.reserved.contains(&i) {
+        if self.vacant.contains(i) || self.reserved.contains(i) {
             None
         } else {
             // 2. Invariant A => reading valid ata
@@ -75,9 +116,14 @@ impl<T> VecStorage<T> {
     }
     // breaks invariant A: returned index is in NO state
     fn pop_vacant(&mut self) -> usize {
-        if let Some(i) = pop_set_arb(&mut self.vacant) {
+        if let Some(i) = self.vacant.pop_first() {
             i
         } else {
+            let bitsets_need_another_chunk = self.data.len() % usize_bits() == 0;
+            if bitsets_need_another_chunk {
+                self.vacant.0.push(0usize);
+                self.reserved.0.push(0usize);
+            }
             self.data.push(MaybeUninit::uninit());
             self.data.len() - 1
         }
@@ -85,7 +131,8 @@ impl<T> VecStorage<T> {
     //////////////
     pub fn clear(&mut self) {
         for i in 0..self.data.len() {
-            if !self.vacant.contains(&i) && !self.reserved.contains(&i) {
+            // SAFE: bitvec bounds ensured by invariant E
+            if unsafe { !self.vacant.contains(i) && !self.reserved.contains(i) } {
                 // invariant A: this element is OCCUPIED
                 unsafe {
                     // 1. by construction, i is in bounds
@@ -94,15 +141,16 @@ impl<T> VecStorage<T> {
                 }
             }
         }
-        self.vacant.clear();
-        self.reserved.clear();
+        self.vacant.0.clear();
+        self.reserved.0.clear();
     }
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         (0..self.data.len()).filter_map(move |i| unsafe { self.get_occupied_unchecked(i) })
     }
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
         (0..self.data.len()).filter_map(move |i| unsafe {
-            if self.vacant.contains(&i) || self.reserved.contains(&i) {
+            // SAFE: bitvec bounds ensured by invariant E
+            if self.vacant.contains(i) || self.reserved.contains(i) {
                 None
             } else {
                 // 2. Invariant A => reading valid ata
@@ -120,8 +168,9 @@ impl<T> VecStorage<T> {
             }
         }
     }
-    pub fn get_mut_occupied(&mut self, i: usize) -> Option<&mut T> {
-        if i >= self.data.len() || self.vacant.contains(&i) || self.reserved.contains(&i) {
+    pub fn get_occupied_mut(&mut self, i: usize) -> Option<&mut T> {
+        // SAFE: bitvec bounds ensured by invariant E
+        if i >= self.data.len() || unsafe { self.vacant.contains(i) || self.reserved.contains(i) } {
             None
         } else {
             unsafe {
@@ -133,11 +182,13 @@ impl<T> VecStorage<T> {
     }
     pub fn new_reserved(&mut self) -> usize {
         let i = self.pop_vacant(); // breaks invariant A: i is in NO state
-        self.reserved.insert(i); // restores invariant A
+                                   // SAFE: bitvec bounds ensured by invariant E
+        unsafe { self.reserved.insert(i) }; // restores invariant A
         i
     }
     pub fn occupy_reserved(&mut self, i: usize, t: T) {
-        assert!(self.reserved.remove(&i)); // breaks invariant A
+        // SAFE: bitvec bounds ensured by invariant E
+        assert!(unsafe { self.reserved.remove(i) }); // breaks invariant A
         unsafe {
             // 1. invariant C => write is within bounds
             // 2. i WAS reserved => no initialized data is being overwritten
@@ -156,12 +207,14 @@ impl<T> VecStorage<T> {
         i
     }
     pub fn vacate(&mut self, i: usize) -> Option<T> {
-        if i >= self.data.len() || self.vacant.contains(&i) {
+        // SAFE: bitvec bounds ensured by invariant E
+        if i >= self.data.len() || unsafe { self.vacant.contains(i) } {
             // already vacant. nothing to do here
             return None;
         }
         // i is certainly within bounds of self.data
-        let value = if self.reserved.remove(&i) {
+        // SAFE: bitvec bounds ensured by invariant E
+        let value = if unsafe { self.reserved.remove(i) } {
             // no data to drop
             None
         } else {
@@ -182,7 +235,10 @@ impl<T> VecStorage<T> {
                     .data
                     .len()
                     .checked_sub(1)
-                    .map(|index| self.vacant.remove(&index))
+                    .map(|index| unsafe {
+                        // SAFE: bitvec bounds ensured by invariant E
+                        self.vacant.remove(index)
+                    })
                     .unwrap_or(false);
                 if !pop_next {
                     break;
@@ -190,21 +246,13 @@ impl<T> VecStorage<T> {
             }
         } else {
             // ... by populating self.vacant.
-            self.vacant.insert(i);
+            // SAFE: bitvec bounds ensured by invariant E
+            unsafe { self.vacant.insert(i) };
         }
         value
     }
     pub fn iter_reserved(&self) -> impl Iterator<Item = usize> + '_ {
-        self.reserved.iter().copied()
-    }
-}
-
-fn pop_set_arb(s: &mut BTreeSet<usize>) -> Option<usize> {
-    if let Some(&x) = s.iter().next() {
-        s.remove(&x);
-        Some(x)
-    } else {
-        None
+        self.reserved.iter()
     }
 }
 
@@ -217,15 +265,20 @@ fn vec_storage() {
             println!("DROPPING FOO!");
         }
     }
-
     let mut v = VecStorage::default();
     let i0 = v.new_occupied(Foo);
     println!("{:?}", &v);
+
     let i1 = v.new_reserved();
     println!("{:?}", &v);
+
     let q = v.vacate(i0);
     println!("q {:?}", q);
     println!("{:?}", &v);
+
     v.occupy_reserved(i1, Foo);
+    println!("{:?}", &v);
+
+    *v.get_occupied_mut(i1).unwrap() = Foo;
     println!("{:?}", &v);
 }

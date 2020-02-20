@@ -16,22 +16,24 @@ pub const fn usizes_for_bits(bits: usize) -> usize {
     (bits + (usize_bits() - 1)) / usize_bits()
 }
 
-pub(crate) struct BitChunkIter<I: Iterator<Item = usize>> {
+type Chunk = usize;
+type BitIndex = usize;
+pub(crate) struct BitChunkIter<I: Iterator<Item = Chunk>> {
     cached: usize,
     chunk_iter: I,
-    next_bit_index: u32,
+    next_bit_index: BitIndex,
 }
-impl<I: Iterator<Item = usize>> BitChunkIter<I> {
+impl<I: Iterator<Item = Chunk>> BitChunkIter<I> {
     pub fn new(chunk_iter: I) -> Self {
         // first chunk is always a dummy zero, as if chunk_iter yielded Some(FALSE).
         // Consequences:
         // 1. our next_bit_index is always off by usize_bits() (we correct for it in Self::next) (no additional overhead)
-        // 2. we cache usize and not Option<usize>, because chunk_iter.next() is only called in Self::next.
+        // 2. we cache Chunk and not Option<Chunk>, because chunk_iter.next() is only called in Self::next.
         Self { chunk_iter, next_bit_index: 0, cached: 0 }
     }
 }
-impl<I: Iterator<Item = usize>> Iterator for BitChunkIter<I> {
-    type Item = u32;
+impl<I: Iterator<Item = Chunk>> Iterator for BitChunkIter<I> {
+    type Item = BitIndex;
     fn next(&mut self) -> Option<Self::Item> {
         let mut chunk = self.cached;
 
@@ -43,8 +45,7 @@ impl<I: Iterator<Item = usize>> Iterator for BitChunkIter<I> {
             chunk = self.chunk_iter.next()?;
 
             // ... and jump self.next_bit_index to the next multiple of usize_bits().
-            self.next_bit_index =
-                (self.next_bit_index + usize_bits() as u32) & !(usize_bits() as u32 - 1);
+            self.next_bit_index = (self.next_bit_index + usize_bits()) & !(usize_bits() - 1);
         }
         // there exists 1+ set bits in chunk
         // assert(chunk > 0);
@@ -54,7 +55,7 @@ impl<I: Iterator<Item = usize>> Iterator for BitChunkIter<I> {
         // 2. and increment self.next_bit_index accordingly
         // effectively performs a little binary search, shifting 32, then 16, ...
         // TODO perhaps there is a more efficient SIMD op for this?
-        const N_INIT: u32 = usize_bits() as u32 / 2;
+        const N_INIT: BitIndex = usize_bits() / 2;
         let mut n = N_INIT;
         while n >= 1 {
             // n is [32,16,8,4,2,1] on 64-bit machine
@@ -78,7 +79,7 @@ impl<I: Iterator<Item = usize>> Iterator for BitChunkIter<I> {
 
         // returned index is usize_bits() smaller than self.next_bit_index because we use an
         // off-by-usize_bits() encoding to avoid having to cache an Option<usize>.
-        Some(self.next_bit_index - 1 - usize_bits() as u32)
+        Some(self.next_bit_index - 1 - usize_bits())
     }
 }
 
@@ -249,8 +250,7 @@ impl BitMatrix {
         }
         if let Some(mask) = Self::last_row_chunk_mask(self.bounds.entity) {
             // TODO TEST
-            let mut ptr =
-                unsafe { self.buffer.add((column_chunks - 1) as usize * row_chunks as usize) };
+            let mut ptr = unsafe { self.buffer.add((column_chunks - 1) * row_chunks) };
             for _ in 0..row_chunks {
                 unsafe {
                     *ptr &= mask;
@@ -268,7 +268,7 @@ impl BitMatrix {
         &'a self,
         buf: &'b mut Vec<usize>,
         mut fold_fn: impl FnMut(&'b [BitChunk]) -> BitChunk,
-    ) -> BitChunkIter<std::vec::Drain<'b, usize>> {
+    ) -> impl Iterator<Item = u32> + 'b {
         let buf_start = buf.len();
         let row_chunks = Self::row_chunks(self.bounds.property as usize);
         let column_chunks = Self::column_chunks(self.bounds.entity as usize);
@@ -286,7 +286,7 @@ impl BitMatrix {
         if let Some(mask) = Self::last_row_chunk_mask(self.bounds.entity) {
             *buf.iter_mut().last().unwrap() &= mask;
         }
-        BitChunkIter::new(buf.drain(buf_start..))
+        BitChunkIter::new(buf.drain(buf_start..)).map(|x| x as u32)
     }
 }
 
