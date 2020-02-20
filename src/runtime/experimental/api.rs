@@ -222,22 +222,23 @@ fn api_new_test() {
 
 #[repr(C)]
 pub struct PortOp {
-    msgbuf: *mut u8,
-    buflen: usize,
-    msglen: usize,
-    optional: bool,
+    msgptr: *mut u8, // read if OUT, field written if IN, will point into buf
+    msglen: usize,   // read if OUT, written if IN, won't exceed buf
+    port: Port,
+    optional: bool, // no meaning if
 }
 
 pub enum PortOpRs<'a> {
     In { msg_range: Option<Range<usize>>, port: &'a InPort },
     Out { msg: &'a [u8], port: &'a OutPort, optional: bool },
 }
-pub struct InPortOp<'a> {
-    msg_range: Option<Range<usize>>, // written by sync
-    port: &'a InPort,
-}
-pub struct OutPortOp<'a> {
-    msg: &'a [u8],
-    port: &'a OutPort,
-    optional: bool,
+
+fn c_sync_set(
+    connected: &mut Connected,
+    inbuflen: usize,
+    inbuf: *mut u8,
+    opslen: usize,
+    ops: *mut PortOp,
+) -> i32 {
+    todo!()
 }
