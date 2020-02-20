@@ -10,7 +10,5 @@ mod test;
 
 pub use runtime::{errors, Connector, PortBinding};
 
-pub use crate::runtime::experimental::api::Port;
-
 #[cfg(feature = "ffi")]
 pub use runtime::ffi;
