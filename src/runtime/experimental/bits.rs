@@ -1,4 +1,5 @@
 use crate::common::*;
+use std::alloc::Layout;
 
 /// Given an iterator over BitChunk Items, iterates over the indices (each represented as a u32) for which the bit is SET,
 /// treating the bits in the BitChunk as a contiguous array.
@@ -107,17 +108,15 @@ impl From<[u32; 2]> for Pair {
     }
 }
 struct BitMatrix {
-    bounds: Pair,
     buffer: *mut usize,
+    bounds: Pair,
+    layout: Layout, // layout of the currently-allocated buffer
 }
 impl Drop for BitMatrix {
     fn drop(&mut self) {
-        let total_chunks = Self::row_chunks(self.bounds.property as usize)
-            * Self::column_chunks(self.bounds.entity as usize);
-        let layout = Self::layout_for(total_chunks);
         unsafe {
             // ?
-            std::alloc::dealloc(self.buffer as *mut u8, layout);
+            std::alloc::dealloc(self.buffer as *mut u8, self.layout);
         }
     }
 }
@@ -188,18 +187,12 @@ impl BitMatrix {
         assert!(at.property < self.bounds.property);
     }
 
-    fn layout_for(mut total_chunks: usize) -> std::alloc::Layout {
+    fn layout_for(total_chunks: usize) -> std::alloc::Layout {
         unsafe {
             // this layout is ALWAYS valid:
             // 1. size is always nonzero
             // 2. size is always a multiple of 4 and 4-aligned
-            if total_chunks == 0 {
-                total_chunks = 1;
-            }
-            std::alloc::Layout::from_size_align_unchecked(
-                usize_bytes() * total_chunks,
-                usize_bytes(),
-            )
+            Layout::from_size_align_unchecked(usize_bytes() * total_chunks.max(1), usize_bytes())
         }
     }
     /////////
@@ -217,7 +210,7 @@ impl BitMatrix {
             buffer = std::alloc::alloc(layout) as *mut usize;
             buffer.write_bytes(0u8, total_chunks);
         };
-        Self { buffer, bounds }
+        Self { buffer, bounds, layout }
     }
     fn set(&mut self, at: Pair) {
         self.assert_within_bounds(at);
@@ -297,12 +290,6 @@ use derive_more::*;
 #[repr(transparent)]
 pub struct BitChunk(usize);
 impl BitChunk {
-    const fn bits() -> usize {
-        Self::bytes() * 8
-    }
-    const fn bytes() -> usize {
-        std::mem::size_of::<Self>()
-    }
     const fn any(self) -> bool {
         self.0 != FALSE.0
     }

@@ -47,6 +47,7 @@ impl Bitvec {
 // 1. does not check for the ABA problem
 // 2. imposes the object keys on the user
 // 3. allows the reservation of a space (getting the key) to precede the value being provided.
+// 4. checks for user error
 //
 // Data contains values in one of three states:
 // 1. occupied: ininitialized. will be dropped.
@@ -121,6 +122,20 @@ impl<T> VecStorage<T> {
         }
     }
     //////////////
+    pub fn with_reserved_range(range_end: usize) -> Self {
+        let mut data = Vec::with_capacity(range_end);
+        unsafe {
+            // data is uninitialized, as intended
+            data.set_len(range_end);
+        }
+        let bitset_len = (range_end + (usize_bits() - 1)) / usize_bits();
+        let chunk_iter = std::iter::repeat(0usize).take(bitset_len);
+        Self {
+            data,
+            vacant: Bitvec(chunk_iter.clone().collect()),
+            occupied: Bitvec(chunk_iter.collect()),
+        }
+    }
     pub fn clear(&mut self) {
         for i in 0..self.data.len() {
             // SAFE: bitvec bounds ensured by invariant E
@@ -268,7 +283,7 @@ fn vec_storage() {
             println!("DROPPING FOO!");
         }
     }
-    let mut v = VecStorage::default();
+    let mut v = VecStorage::with_reserved_range(4);
     let i0 = v.new_occupied(Foo);
     println!("{:?}", &v);
 
@@ -277,13 +292,23 @@ fn vec_storage() {
 
     println!("reserved {:?}", v.iter_reserved().collect::<Vec<_>>());
 
-    let q = v.vacate(i0);
-    println!("q {:?}", q);
+    println!("q {:?}", v.vacate(i0));
+    println!("{:?}", &v);
+
+    println!("q {:?}", v.vacate(2));
+    println!("{:?}", &v);
+
+    println!("q {:?}", v.vacate(1));
     println!("{:?}", &v);
 
     v.occupy_reserved(i1, Foo);
     println!("{:?}", &v);
 
     *v.get_occupied_mut(i1).unwrap() = Foo;
+    println!("{:?}", &v);
+
+    println!("q {:?}", v.vacate(i1));
+    println!("{:?}", &v);
+    println!("q {:?}", v.vacate(3));
     println!("{:?}", &v);
 }
