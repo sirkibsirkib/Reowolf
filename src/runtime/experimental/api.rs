@@ -184,7 +184,6 @@ impl Connected {
     ) -> Result<usize, ()> {
         for (batch_index, bit_subset) in bit_subsets.iter().enumerate() {
             println!("batch_index {:?}", batch_index);
-            use super::bits::BitChunkIter;
             let chunk_iter = bit_subset.iter().copied();
             for index in BitChunkIter::new(chunk_iter) {
                 println!("  index {:?}", index);
@@ -233,12 +232,67 @@ pub enum PortOpRs<'a> {
     Out { msg: &'a [u8], port: &'a OutPort, optional: bool },
 }
 
-fn c_sync_set(
+unsafe fn c_sync_set(
     connected: &mut Connected,
     inbuflen: usize,
-    inbuf: *mut u8,
+    inbufptr: *mut u8,
     opslen: usize,
-    ops: *mut PortOp,
+    opsptr: *mut PortOp,
 ) -> i32 {
+    let buf = as_mut_slice(inbuflen, inbufptr);
+    let ops = as_mut_slice(opslen, opsptr);
+    let (subset_index, wrote) = sync_inner(connected, buf);
+    assert_eq!(0, subset_index);
+    for op in ops {
+        if let Some(range) = wrote.get(&op.port) {
+            op.msgptr = inbufptr.add(range.start);
+            op.msglen = range.end - range.start;
+        }
+    }
+    0
+}
+
+use super::bits::{usizes_for_bits, BitChunkIter};
+unsafe fn c_sync_subset(
+    connected: &mut Connected,
+    inbuflen: usize,
+    inbufptr: *mut u8,
+    opslen: usize,
+    opsptr: *mut PortOp,
+    subsetslen: usize,
+    subsetsptr: *const *const usize,
+) -> i32 {
+    let buf: &mut [u8] = as_mut_slice(inbuflen, inbufptr);
+    let ops: &mut [PortOp] = as_mut_slice(opslen, opsptr);
+    let subsets: &[*const usize] = as_const_slice(subsetslen, subsetsptr);
+    let subsetlen = usizes_for_bits(opslen);
+    // don't yet know subsetptr; which subset fires unknown!
+
+    let (subset_index, wrote) = sync_inner(connected, buf);
+    let subsetptr: *const usize = subsets[subset_index];
+    let subset: &[usize] = as_const_slice(subsetlen, subsetptr);
+
+    for index in BitChunkIter::new(subset.iter().copied()) {
+        let op = &mut ops[index as usize];
+        if let Some(range) = wrote.get(&op.port) {
+            op.msgptr = inbufptr.add(range.start);
+            op.msglen = range.end - range.start;
+        }
+    }
+    subset_index as i32
+}
+
+// dummy fn for the actual synchronous round
+fn sync_inner<'c, 'b>(
+    _connected: &'c mut Connected,
+    _buf: &'b mut [u8],
+) -> (usize, &'b HashMap<Port, Range<usize>>) {
     todo!()
+}
+
+unsafe fn as_mut_slice<'a, T>(len: usize, ptr: *mut T) -> &'a mut [T] {
+    std::slice::from_raw_parts_mut(ptr, len)
+}
+unsafe fn as_const_slice<'a, T>(len: usize, ptr: *const T) -> &'a [T] {
+    std::slice::from_raw_parts(ptr, len)
 }

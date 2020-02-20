@@ -6,11 +6,14 @@ use crate::common::*;
 /// observe that the bits per chunk are ordered from least to most significant bits, yielding smaller to larger usizes.
 /// assumes chunk_iter will yield no more than std::u32::MAX / 32 chunks
 
-const fn usize_bytes() -> usize {
+pub const fn usize_bytes() -> usize {
     std::mem::size_of::<usize>()
 }
-const fn usize_bits() -> usize {
+pub const fn usize_bits() -> usize {
     usize_bytes() * 8
+}
+pub const fn usizes_for_bits(bits: usize) -> usize {
+    (bits + (usize_bits() - 1)) / usize_bits()
 }
 
 pub(crate) struct BitChunkIter<I: Iterator<Item = usize>> {
@@ -146,10 +149,6 @@ impl Debug for BitMatrix {
 }
 impl BitMatrix {
     #[inline]
-    const fn chunk_len_ceil(value: usize) -> usize {
-        (value + usize_bits() - 1) & !(usize_bits() - 1)
-    }
-    #[inline]
     const fn row_of(entity: usize) -> usize {
         entity / usize_bits()
     }
@@ -159,7 +158,7 @@ impl BitMatrix {
     }
     #[inline]
     const fn column_chunks(entity_bound: usize) -> usize {
-        Self::chunk_len_ceil(entity_bound) / usize_bits()
+        usizes_for_bits(entity_bound + 1)
     }
     #[inline]
     fn offsets_unchecked(&self, at: Pair) -> [usize; 2] {
