@@ -42,7 +42,9 @@ pub enum Polarity {
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Copy, Clone, Debug)]
-pub struct Key(u64);
+#[repr(C)]
+pub struct Port(pub usize); // ports are COPY
+pub type Key = Port;
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum MainComponentErr {
@@ -105,10 +107,10 @@ pub trait PolyContext {
 
 ///////////////////// IMPL /////////////////////
 impl Key {
-    pub fn from_raw(raw: u64) -> Self {
+    pub fn from_raw(raw: usize) -> Self {
         Self(raw)
     }
-    pub fn to_raw(self) -> u64 {
+    pub fn to_raw(self) -> usize {
         self.0
     }
     pub fn to_token(self) -> mio::Token {

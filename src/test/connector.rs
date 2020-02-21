@@ -82,7 +82,7 @@ composite fifo_1_e(in i, out o) {
 ";
 
 #[test]
-fn connects_ok() {
+fn connector_connects_ok() {
     // Test if we can connect natives using the given PDL
     /*
     Alice -->silence--P|A-->silence--> Bob
@@ -108,7 +108,7 @@ fn connects_ok() {
 }
 
 #[test]
-fn connected_but_silent_natives() {
+fn connector_connected_but_silent_natives() {
     // Test if we can connect natives and have a trivial sync round
     /*
     Alice -->silence--P|A-->silence--> Bob
@@ -136,7 +136,7 @@ fn connected_but_silent_natives() {
 }
 
 #[test]
-fn self_forward_ok() {
+fn connector_self_forward_ok() {
     // Test a deterministic system
     // where a native has no network bindings
     // and sends messages to itself
@@ -166,7 +166,7 @@ fn self_forward_ok() {
     ]));
 }
 #[test]
-fn token_spout_ok() {
+fn connector_token_spout_ok() {
     // Test a deterministic system where the proto
     // creates token messages
     /*
@@ -191,7 +191,7 @@ fn token_spout_ok() {
 }
 
 #[test]
-fn waiter_ok() {
+fn connector_waiter_ok() {
     // Test a stateful proto that blocks port 0 for 10 rounds
     // and then sends a single token on the 11th
     /*
@@ -217,7 +217,7 @@ fn waiter_ok() {
 }
 
 #[test]
-fn self_forward_timeout() {
+fn connector_self_forward_timeout() {
     // Test a deterministic system
     // where a native has no network bindings
     // and sends messages to itself
@@ -244,7 +244,7 @@ fn self_forward_timeout() {
 }
 
 #[test]
-fn forward_det() {
+fn connector_forward_det() {
     // Test if a deterministic protocol and natives can pass one message
     /*
     Alice -->forward--P|A-->forward--> Bob
@@ -280,7 +280,7 @@ fn forward_det() {
 }
 
 #[test]
-fn nondet_proto_det_natives() {
+fn connector_nondet_proto_det_natives() {
     // Test the use of a nondeterministic protocol
     // where Alice decides the choice and the others conform
     /*
@@ -318,7 +318,7 @@ fn nondet_proto_det_natives() {
 }
 
 #[test]
-fn putter_determines() {
+fn connector_putter_determines() {
     // putter and getter
     /*
     Alice -->sync--A|P-->sync--> Bob
@@ -358,7 +358,7 @@ fn putter_determines() {
 }
 
 #[test]
-fn getter_determines() {
+fn connector_getter_determines() {
     // putter and getter
     /*
     Alice -->sync--A|P-->sync--> Bob
@@ -399,7 +399,7 @@ fn getter_determines() {
 }
 
 #[test]
-fn alternator_2() {
+fn connector_alternator_2() {
     // Test a deterministic system which
     // alternates sending Sender's messages to A or B
     /*                    /--|-->A
@@ -466,7 +466,7 @@ fn alternator_2() {
 }
 
 #[test]
-fn composite_chain_a() {
+fn connector_composite_chain_a() {
     // Check if composition works. Forward messages through long chains
     /*
     Alice -->sync-->sync-->A|P-->sync--> Bob
@@ -505,7 +505,7 @@ fn composite_chain_a() {
 }
 
 #[test]
-fn composite_chain_b() {
+fn connector_composite_chain_b() {
     // Check if composition works. Forward messages through long chains
     /*
     Alice -->sync-->sync-->A|P-->sync-->sync--> Bob
@@ -544,7 +544,7 @@ fn composite_chain_b() {
 }
 
 #[test]
-fn exchange() {
+fn connector_exchange() {
     /*
         /-->\      /-->P|A-->\      /-->\
     Alice   exchange         exchange   Bob
@@ -589,7 +589,7 @@ fn exchange() {
 }
 
 #[test]
-fn routing_filter() {
+fn connector_routing_filter() {
     // Make a protocol whose behavior is a function of the contents of
     // a message. Here, the putter determines what is sent, and the proto
     // determines how it is routed
@@ -650,7 +650,7 @@ fn routing_filter() {
 }
 
 #[test]
-fn fifo_1_e() {
+fn connector_fifo_1_e() {
     /*
         /-->\
     Alice   fifo_1

@@ -64,14 +64,21 @@ impl Bitvec {
 // invariant C: (vacant U occupied) subset of (0..data.len)
 // invariant D: last element of data is not in VACANT state
 // invariant E: number of allocated bits in vacant and occupied >= data.len()
+// invariant F: vacant_bit_count == vacant.iter().count()
 pub struct VecStorage<T> {
     data: Vec<MaybeUninit<T>>,
     occupied: Bitvec,
     vacant: Bitvec,
+    occupied_bit_count: usize,
 }
 impl<T> Default for VecStorage<T> {
     fn default() -> Self {
-        Self { data: Default::default(), vacant: Default::default(), occupied: Default::default() }
+        Self {
+            data: Default::default(),
+            vacant: Default::default(),
+            occupied: Default::default(),
+            occupied_bit_count: 0,
+        }
     }
 }
 impl<T: Debug> Debug for VecStorage<T> {
@@ -122,6 +129,9 @@ impl<T> VecStorage<T> {
         }
     }
     //////////////
+    pub fn len(&self) -> usize {
+        self.occupied_bit_count
+    }
     pub fn with_reserved_range(range_end: usize) -> Self {
         let mut data = Vec::with_capacity(range_end);
         unsafe {
@@ -134,6 +144,7 @@ impl<T> VecStorage<T> {
             data,
             vacant: Bitvec(chunk_iter.clone().collect()),
             occupied: Bitvec(chunk_iter.collect()),
+            occupied_bit_count: 0,
         }
     }
     pub fn clear(&mut self) {
@@ -150,6 +161,7 @@ impl<T> VecStorage<T> {
         }
         self.vacant.0.clear();
         self.occupied.0.clear();
+        self.occupied_bit_count = 0;
     }
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         (0..self.data.len()).filter_map(move |i| unsafe { self.get_occupied_unchecked(i) })
@@ -213,6 +225,7 @@ impl<T> VecStorage<T> {
             self.data.get_unchecked_mut(i).as_mut_ptr().write(t);
             self.occupied.insert(i);
         };
+        self.occupied_bit_count += 1;
     }
     pub fn new_occupied(&mut self, t: T) -> usize {
         let i = self.new_reserved();
@@ -222,6 +235,7 @@ impl<T> VecStorage<T> {
             self.data.get_unchecked_mut(i).as_mut_ptr().write(t);
             self.occupied.insert(i);
         };
+        self.occupied_bit_count += 1;
         i
     }
     pub fn vacate(&mut self, i: usize) -> Option<T> {
@@ -236,6 +250,7 @@ impl<T> VecStorage<T> {
             unsafe {
                 // 1. index is within bounds
                 // 2. i is occupied => initialized data is being read
+                self.occupied_bit_count -= 1;
                 Some(self.data.get_unchecked_mut(i).as_ptr().read())
             }
         } else {
