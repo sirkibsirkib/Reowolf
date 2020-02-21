@@ -86,7 +86,7 @@ pub enum ConnectErr {
     NewSocketErr(SocketAddr),
     AcceptErr(SocketAddr),
     ConnectionShutdown(SocketAddr),
-    PortKindMismatch(SocketAddr),
+    PortKindMismatch(Port, SocketAddr),
     EndpointErr(Port, EndpointErr),
     PollInitFailed,
     PollingFailed,
@@ -240,13 +240,13 @@ impl Connecting {
                         num_todos_remaining -= 1;
                     }
                     Some(Todo::ActiveRecving { mut endpoint }) => {
-                        let ekey = Key::from_raw(index);
+                        let ekey = Port(index);
                         'recv_loop: while let Some(msg) =
-                            endpoint.recv().map_err(|e| EndpointErr(Port(index), e))?
+                            endpoint.recv().map_err(|e| EndpointErr(ekey, e))?
                         {
                             if let Msg::SetupMsg(SetupMsg::ChannelSetup { info }) = msg {
                                 if info.polarity == binding.polarity {
-                                    return Err(PortKindMismatch(binding.addr));
+                                    return Err(PortKindMismatch(ekey, binding.addr));
                                 }
                                 let channel_id = info.channel_id;
                                 let info = EndpointInfo { polarity: binding.polarity, channel_id };
@@ -637,18 +637,28 @@ fn api_connecting() {
         "127.0.0.1:8889".parse().unwrap(),
         "127.0.0.1:8890".parse().unwrap(),
     ];
+    const TIMEOUT: Option<Duration> = Some(Duration::from_secs(1));
     let handles = vec![
         std::thread::spawn(move || {
             let mut connecting = Connecting::default();
-            let _a: OutPort = connecting.bind(Coupling::Active, addrs[0]);
-            let connected = connecting.connect(None);
+            let _a: OutPort = connecting.bind(Coupling::Passive, addrs[0]);
+            let _b: OutPort = connecting.bind(Coupling::Active, addrs[1]);
+            let connected = connecting.connect(TIMEOUT);
             println!("A: {:#?}", connected);
         }),
         std::thread::spawn(move || {
             let mut connecting = Connecting::default();
-            let _a: OutPort = connecting.bind(Coupling::Passive, addrs[0]);
-            let connected = connecting.connect(Some(Duration::from_secs(2)));
+            let _a: InPort = connecting.bind(Coupling::Active, addrs[0]);
+            let _b: InPort = connecting.bind(Coupling::Passive, addrs[1]);
+            let _c: InPort = connecting.bind(Coupling::Active, addrs[2]);
+            let connected = connecting.connect(TIMEOUT);
             println!("B: {:#?}", connected);
+        }),
+        std::thread::spawn(move || {
+            let mut connecting = Connecting::default();
+            let _a: OutPort = connecting.bind(Coupling::Passive, addrs[2]);
+            let connected = connecting.connect(TIMEOUT);
+            println!("C: {:#?}", connected);
         }),
     ];
     for h in handles {
