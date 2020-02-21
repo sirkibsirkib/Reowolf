@@ -19,6 +19,7 @@ pub const fn usizes_for_bits(bits: usize) -> usize {
 
 type Chunk = usize;
 type BitIndex = usize;
+
 pub(crate) struct BitChunkIter<I: Iterator<Item = Chunk>> {
     cached: usize,
     chunk_iter: I,
@@ -26,7 +27,7 @@ pub(crate) struct BitChunkIter<I: Iterator<Item = Chunk>> {
 }
 impl<I: Iterator<Item = Chunk>> BitChunkIter<I> {
     pub fn new(chunk_iter: I) -> Self {
-        // first chunk is always a dummy zero, as if chunk_iter yielded Some(FALSE).
+        // first chunk is always a dummy zero, as if chunk_iter yielded Some(FALSE_CHUNK).
         // Consequences:
         // 1. our next_bit_index is always off by usize_bits() (we correct for it in Self::next) (no additional overhead)
         // 2. we cache Chunk and not Option<Chunk>, because chunk_iter.next() is only called in Self::next.
@@ -84,6 +85,47 @@ impl<I: Iterator<Item = Chunk>> Iterator for BitChunkIter<I> {
     }
 }
 
+pub(crate) struct BitChunkIterRev<I: ExactSizeIterator<Item = Chunk>> {
+    cached: usize,
+    chunk_iter: I,
+    next_bit_index: BitIndex,
+}
+impl<I: ExactSizeIterator<Item = Chunk>> BitChunkIterRev<I> {
+    pub fn new(chunk_iter: I) -> Self {
+        let next_bit_index = chunk_iter.len() * usize_bits();
+        Self { chunk_iter, next_bit_index, cached: 0 }
+    }
+}
+impl<I: ExactSizeIterator<Item = Chunk>> Iterator for BitChunkIterRev<I> {
+    type Item = BitIndex;
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut chunk = self.cached;
+        if chunk == 0 {
+            self.next_bit_index += usize_bits();
+            loop {
+                self.next_bit_index -= usize_bits();
+                chunk = self.chunk_iter.next()?;
+                if chunk != 0 {
+                    break;
+                }
+            }
+        }
+        const N_INIT: BitIndex = usize_bits() / 2;
+        let mut n = N_INIT;
+        while n >= 1 {
+            let n_most_significant_mask = !0 << (usize_bits() - n);
+            if chunk & n_most_significant_mask == 0 {
+                self.next_bit_index -= n;
+                chunk <<= n;
+            }
+            n /= 2;
+        }
+        self.cached = chunk << 1;
+        self.next_bit_index -= 1;
+        Some(self.next_bit_index)
+    }
+}
+
 /*  --properties-->
      ___ ___ ___ ___
     |___|___|___|___|
@@ -98,9 +140,9 @@ impl<I: Iterator<Item = Chunk>> Iterator for BitChunkIter<I> {
 // TODO newtypes Entity and Property
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-struct Pair {
-    entity: u32,
-    property: u32,
+pub struct Pair {
+    pub entity: u32,
+    pub property: u32,
 }
 impl From<[u32; 2]> for Pair {
     fn from([entity, property]: [u32; 2]) -> Self {
@@ -173,7 +215,7 @@ impl BitMatrix {
     }
     #[inline]
     const fn column_chunks(entity_bound: usize) -> usize {
-        usizes_for_bits(entity_bound + 1)
+        usizes_for_bits(entity_bound)
     }
     #[inline]
     fn offsets_unchecked(&self, at: Pair) -> [usize; 2] {
@@ -211,12 +253,40 @@ impl BitMatrix {
         }
     }
     /////////
+    pub fn grow_to(&mut self, bounds: Pair) {
+        assert!(bounds.entity >= self.bounds.entity);
+        assert!(bounds.property >= self.bounds.property);
 
-    fn reshape(&mut self, bounds: Pair) {
-        todo!()
+        let old_row_chunks = Self::row_chunks(self.bounds.property as usize);
+        let old_col_chunks = Self::column_chunks(self.bounds.entity as usize);
+        let new_row_chunks = Self::row_chunks(bounds.property as usize);
+        let new_col_chunks = Self::column_chunks(bounds.entity as usize);
+
+        let new_layout = Self::layout_for(new_row_chunks * new_col_chunks);
+        let new_buffer = unsafe {
+            let new_buffer = std::alloc::alloc(new_layout) as *mut usize;
+            let mut src: *mut usize = self.buffer;
+            let mut dest: *mut usize = new_buffer;
+            let row_chunk_diff = new_row_chunks - old_row_chunks;
+            for _col_idx in 0..old_col_chunks {
+                src.copy_to_nonoverlapping(dest, old_row_chunks);
+                src = src.add(old_row_chunks);
+                dest = dest.add(old_row_chunks);
+                if row_chunk_diff > 0 {
+                    dest.write_bytes(0u8, row_chunk_diff);
+                    dest = dest.add(row_chunk_diff);
+                }
+            }
+            let last_zero_chunks = (new_col_chunks - old_col_chunks) * new_row_chunks;
+            dest.write_bytes(0u8, last_zero_chunks);
+            new_buffer
+        };
+        self.layout = new_layout;
+        self.buffer = new_buffer;
+        self.bounds = bounds;
     }
 
-    fn new(bounds: Pair) -> Self {
+    pub fn new(bounds: Pair) -> Self {
         let total_chunks = Self::row_chunks(bounds.property as usize)
             * Self::column_chunks(bounds.entity as usize);
         let layout = Self::layout_for(total_chunks);
@@ -227,23 +297,23 @@ impl BitMatrix {
         };
         Self { buffer, bounds, layout }
     }
-    fn set(&mut self, at: Pair) {
+    pub fn set(&mut self, at: Pair) {
         self.assert_within_bounds(at);
         let [o_of, o_in] = self.offsets_unchecked(at);
         unsafe { *self.buffer.add(o_of) |= 1 << o_in };
     }
-    fn unset(&mut self, at: Pair) {
+    pub fn unset(&mut self, at: Pair) {
         self.assert_within_bounds(at);
         let [o_of, o_in] = self.offsets_unchecked(at);
         unsafe { *self.buffer.add(o_of) &= !(1 << o_in) };
     }
-    fn test(&self, at: Pair) -> bool {
+    pub fn test(&self, at: Pair) -> bool {
         self.assert_within_bounds(at);
         let [o_of, o_in] = self.offsets_unchecked(at);
         unsafe { *self.buffer.add(o_of) & 1 << o_in != 0 }
     }
 
-    fn batch_mut<'a, 'b>(&mut self, mut chunk_mut_fn: impl FnMut(&'b mut [BitChunk])) {
+    pub fn batch_mut<'a, 'b>(&mut self, mut chunk_mut_fn: impl FnMut(&'b mut [BitChunk])) {
         let row_chunks = Self::row_chunks(self.bounds.property as usize);
         let column_chunks = Self::column_chunks(self.bounds.entity as usize);
         let mut ptr = self.buffer;
@@ -272,7 +342,7 @@ impl BitMatrix {
     /// 1. a buffer to work with
     /// 2. a _fold function_ for combining the properties of a given entity
     ///    and returning a new derived property (working )
-    fn iter_entities_where<'a, 'b>(
+    pub fn iter_entities_where<'a, 'b>(
         &'a self,
         buf: &'b mut Vec<usize>,
         mut fold_fn: impl FnMut(&'b [BitChunk]) -> BitChunk,
@@ -296,6 +366,30 @@ impl BitMatrix {
         }
         BitChunkIter::new(buf.drain(buf_start..)).map(|x| x as u32)
     }
+    pub fn iter_entities_where_rev<'a, 'b>(
+        &'a self,
+        buf: &'b mut Vec<usize>,
+        mut fold_fn: impl FnMut(&'b [BitChunk]) -> BitChunk,
+    ) -> impl Iterator<Item = u32> + 'b {
+        let buf_start = buf.len();
+        let row_chunks = Self::row_chunks(self.bounds.property as usize);
+        let column_chunks = Self::column_chunks(self.bounds.entity as usize);
+        let mut ptr = self.buffer;
+        for _row in 0..column_chunks {
+            let slice;
+            unsafe {
+                let slicey = std::slice::from_raw_parts(ptr, row_chunks);
+                slice = std::mem::transmute(slicey);
+                ptr = ptr.add(row_chunks);
+            }
+            let chunk = fold_fn(slice);
+            buf.push(chunk.0);
+        }
+        if let Some(mask) = Self::last_row_chunk_mask(self.bounds.entity) {
+            *buf.iter_mut().last().unwrap() &= mask;
+        }
+        BitChunkIterRev::new(buf.drain(buf_start..).rev()).map(|x| x as u32)
+    }
 }
 
 use derive_more::*;
@@ -306,14 +400,14 @@ use derive_more::*;
 pub struct BitChunk(usize);
 impl BitChunk {
     const fn any(self) -> bool {
-        self.0 != FALSE.0
+        self.0 != FALSE_CHUNK.0
     }
     const fn all(self) -> bool {
-        self.0 == TRUE.0
+        self.0 == TRUE_CHUNK.0
     }
 }
-const TRUE: BitChunk = BitChunk(!0);
-const FALSE: BitChunk = BitChunk(0);
+pub const TRUE_CHUNK: BitChunk = BitChunk(!0);
+pub const FALSE_CHUNK: BitChunk = BitChunk(0);
 
 #[test]
 fn matrix_test() {
@@ -322,22 +416,33 @@ fn matrix_test() {
     m.set([40, 1].into());
     m.set([40, 2].into());
     m.set([40, 0].into());
-    println!("{:?}", &m);
+    println!("{:#?}", &m);
 
-    m.batch_mut(|p| p[0] = TRUE);
-    println!("{:?}", &m);
+    m.batch_mut(|p| p[0] = TRUE_CHUNK);
+    println!("{:#?}", &m);
 
     for i in (0..40).step_by(7) {
         m.unset([i, 0].into());
     }
     m.unset([62, 0].into());
-    println!("{:?}", &m);
+    println!("{:#?}", &m);
 
-    m.batch_mut(move |p| p[1] = p[0] ^ TRUE);
-    println!("{:?}", &m);
+    m.batch_mut(move |p| p[1] = p[0] ^ TRUE_CHUNK);
+    println!("{:#?}", &m);
 
     let mut buf = vec![];
     for index in m.iter_entities_where(&mut buf, move |p| p[1]) {
         println!("index {}", index);
+    }
+    for index in m.iter_entities_where_rev(&mut buf, move |p| p[1]) {
+        println!("index {}", index);
+    }
+}
+
+#[test]
+fn bit_chunk_iter_rev() {
+    let x = &[0b1, 0b1000011, 0, 0, 0b101];
+    for i in BitChunkIterRev::new(x.iter().copied()) {
+        println!("i = {:?}", i);
     }
 }
