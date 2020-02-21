@@ -88,6 +88,7 @@ impl From<MainComponentErr> for ConfigErr {
         match e {
             M::NoSuchComponent => C::NoSuchComponent,
             M::NonPortTypeParameters => C::NonPortTypeParameters,
+            _ => todo!(),
         }
     }
 }

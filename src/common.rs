@@ -50,6 +50,11 @@ pub type Key = Port;
 pub enum MainComponentErr {
     NoSuchComponent,
     NonPortTypeParameters,
+    CannotMovePort(Port),
+    WrongNumberOfParamaters { expected: usize },
+    UnknownPort(Port),
+    WrongPortPolarity { param_index: usize, port: Port },
+    DuplicateMovedPort(Port),
 }
 pub trait ProtocolDescription: Sized {
     type S: ComponentState<D = Self>;
