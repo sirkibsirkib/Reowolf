@@ -79,7 +79,7 @@ pub enum EvalErr {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum MessengerRecvErr {
     PollingFailed,
-    EndpointErr(EndpointErr),
+    EndpointErr(Port, EndpointErr),
 }
 impl From<MainComponentErr> for ConfigErr {
     fn from(e: MainComponentErr) -> Self {

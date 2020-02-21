@@ -207,7 +207,11 @@ trait Messengerlike {
         loop {
             // polled_undrained may not be empty
             while let Some(eekey) = self.get_state_mut().polled_undrained.pop() {
-                if let Some(msg) = self.get_endpoint_mut(eekey).recv()? {
+                if let Some(msg) = self
+                    .get_endpoint_mut(eekey)
+                    .recv()
+                    .map_err(|e| MessengerRecvErr::EndpointErr(eekey, e))?
+                {
                     // this endpoint MAY still have messages! check again in future
                     self.get_state_mut().polled_undrained.insert(eekey);
                     return Ok(Some(ReceivedMsg { recipient: eekey, msg }));
@@ -240,7 +244,11 @@ trait Messengerlike {
         loop {
             // polled_undrained may not be empty
             while let Some(eekey) = self.get_state_mut().polled_undrained.pop() {
-                if let Some(msg) = self.get_endpoint_mut(eekey).recv()? {
+                if let Some(msg) = self
+                    .get_endpoint_mut(eekey)
+                    .recv()
+                    .map_err(|e| MessengerRecvErr::EndpointErr(eekey, e))?
+                {
                     // this endpoint MAY still have messages! check again in future
                     self.get_state_mut().polled_undrained.insert(eekey);
                     return Ok(Some(ReceivedMsg { recipient: eekey, msg }));
@@ -287,11 +295,11 @@ impl From<MessengerRecvErr> for ConnectErr {
         ConnectErr::MessengerRecvErr(e)
     }
 }
-impl From<EndpointErr> for MessengerRecvErr {
-    fn from(e: EndpointErr) -> MessengerRecvErr {
-        MessengerRecvErr::EndpointErr(e)
-    }
-}
+// impl From<EndpointErr> for MessengerRecvErr {
+//     fn from(e: EndpointErr) -> MessengerRecvErr {
+//         MessengerRecvErr::EndpointErr(e)
+//     }
+// }
 impl<T> Default for Arena<T> {
     fn default() -> Self {
         Self { storage: vec![] }
@@ -333,6 +341,15 @@ impl ChannelIdStream {
 }
 
 impl MessengerState {
+    fn with_event_capacity(event_capacity: usize) -> Result<Self, std::io::Error> {
+        Ok(Self {
+            poll: Poll::new()?,
+            events: Events::with_capacity(event_capacity),
+            delayed: Default::default(),
+            undelayed: Default::default(),
+            polled_undrained: Default::default(),
+        })
+    }
     // does NOT guarantee that events is non-empty
     fn poll_events(&mut self, deadline: Instant) -> Result<(), PollDeadlineErr> {
         use PollDeadlineErr::*;
