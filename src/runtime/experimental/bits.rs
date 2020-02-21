@@ -253,6 +253,9 @@ impl BitMatrix {
         }
     }
     /////////
+    pub fn get_bounds(&self) -> &Pair {
+        &self.bounds
+    }
     pub fn grow_to(&mut self, bounds: Pair) {
         assert!(bounds.entity >= self.bounds.entity);
         assert!(bounds.property >= self.bounds.property);
@@ -285,7 +288,13 @@ impl BitMatrix {
         self.buffer = new_buffer;
         self.bounds = bounds;
     }
-
+    pub fn clear(&mut self) {
+        let total_chunks = Self::row_chunks(self.bounds.property as usize)
+            * Self::column_chunks(self.bounds.entity as usize);
+        unsafe {
+            self.buffer.write_bytes(0u8, total_chunks);
+        }
+    }
     pub fn new(bounds: Pair) -> Self {
         let total_chunks = Self::row_chunks(bounds.property as usize)
             * Self::column_chunks(bounds.entity as usize);

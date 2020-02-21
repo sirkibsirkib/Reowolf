@@ -549,9 +549,11 @@ impl Connected {
     pub fn sync_set(&mut self, _inbuf: &mut [u8], _ops: &mut [PortOpRs]) -> Result<(), ()> {
         // For every component, take its state and make a singleton machine
         for (component_index, component) in self.components.iter_mut().enumerate() {
-            let machine = Machine { component_index, state: component.state.take().unwrap() };
+            let state = component.state.take().unwrap();
+            let machine = Machine { component_index, state };
             self.ephemeral.machines.push(machine);
         }
+
         // Grow property matrix. has |machines| entities and {to_run => 0, to_remove => 1} properties
         const PROP_TO_RUN: usize = 0;
         const PROP_TO_REMOVE: usize = 1;
@@ -562,7 +564,7 @@ impl Connected {
         self.ephemeral.bit_matrix.batch_mut(move |p| p[PROP_TO_RUN] = TRUE_CHUNK);
 
         /////////////
-        // perform mono runs, adding and removing TO_RUN property bits
+        // perform mono runs, adding and removing TO_RUN property bits bits, and adding PROP_TO_REMOVE property bits
         let mut usize_buf = vec![];
         let mut another_pass = true;
         while another_pass {
@@ -575,8 +577,9 @@ impl Connected {
                 let machine = &mut self.ephemeral.machines[machine_index as usize];
                 let component = self.components.get_occupied(machine.component_index).unwrap();
                 let mut ctx = MonoCtx { another_pass: &mut another_pass };
+                // TODO ctx doesn't work. it may callback to create new machines (setting their TO_RUN and another_pass=true)
                 match machine.state.pre_sync_run(&mut ctx, &component.protocol) {
-                    MonoBlocker::Inconsistent => todo!(),
+                    MonoBlocker::Inconsistent => todo!(), // make entire state inconsistent!
                     MonoBlocker::ComponentExit => self
                         .ephemeral
                         .bit_matrix
@@ -600,14 +603,18 @@ impl Connected {
             drop(machine);
         }
 
-        // from now on, the number
-        let matrix_bounds = Pair { entity: self.ephemeral.machines.len() as u32 * 2, property: 8 };
-        self.ephemeral.bit_matrix = BitMatrix::new(matrix_bounds); // clear propertties
+        // replace old matrix full of bogus data with a new (fresh) one for the set of machines
+        // henceforth, machines(entities) and properties won't shrink or move.
+        self.ephemeral.bit_matrix =
+            BitMatrix::new(Pair { entity: self.ephemeral.machines.len() as u32 * 2, property: 8 });
 
         // !!! TODO poly run until solution is found
 
-        // logically destructure self so we can read and write to different fields interleaved...
+        ////////////////////
         let solution_assignments: Vec<(ChannelId, bool)> = vec![];
+        // solution has been found. time to find a
+
+        // logically destructure self so we can read and write to different fields interleaved...
         let Self {
             components,
             ephemeral: Ephemeral { bit_matrix, assignment_to_bit_property, usize_buf, machines },
@@ -625,8 +632,12 @@ impl Connected {
         for machine_index in machine_index_iter {
             let machine = &machines[machine_index as usize];
             let component = &mut components.get_occupied_mut(machine.component_index).unwrap();
-            component.state = Some(machine.state.clone());
+            let was = component.state.replace(machine.state.clone());
+            assert!(was.is_none()); // 2+ machines matched the solution for this component!
             println!("visiting machine at index {:?}", machine_index);
+        }
+        for component in self.components.iter() {
+            assert!(component.state.is_some()); // 0 machines matched the solution for this component!
         }
         self.ephemeral.clear();
         println!("B {:#?}", self);
