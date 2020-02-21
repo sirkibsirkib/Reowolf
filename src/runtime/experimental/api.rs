@@ -1,3 +1,4 @@
+use super::bits::{usizes_for_bits, BitChunkIter, BitMatrix};
 use super::vec_storage::VecStorage;
 use crate::common::*;
 use crate::runtime::endpoint::EndpointExt;
@@ -410,6 +411,7 @@ impl Connecting {
             endpoint_exts,
             native_ports,
             family,
+            ephemeral: Default::default(),
         })
     }
     /////////
@@ -437,6 +439,11 @@ pub struct Connected {
     endpoint_exts: VecStorage<EndpointExt>,
     components: VecStorage<Component>,
     family: Family,
+    ephemeral: Ephemeral,
+}
+#[derive(Debug, Default)]
+struct Ephemeral {
+    bit_matrix: BitMatrix,
 }
 impl Connected {
     pub fn new_component(
@@ -585,7 +592,6 @@ unsafe fn c_sync_set(
     0
 }
 
-use super::bits::{usizes_for_bits, BitChunkIter};
 unsafe fn c_sync_subset(
     connected: &mut Connected,
     inbuflen: usize,
@@ -637,28 +643,43 @@ fn api_connecting() {
         "127.0.0.1:8889".parse().unwrap(),
         "127.0.0.1:8890".parse().unwrap(),
     ];
+
+    lazy_static::lazy_static! {
+        static ref PROTOCOL: Arc<ProtocolD> = {
+            static PDL: &[u8] = b"
+            primitive sync(in i, out o) {
+                while(true) synchronous {
+                    put(o, get(i));
+                }
+            }
+            ";
+            Arc::new(ProtocolD::parse(PDL).unwrap())
+        };
+    }
+
     const TIMEOUT: Option<Duration> = Some(Duration::from_secs(1));
     let handles = vec![
         std::thread::spawn(move || {
             let mut connecting = Connecting::default();
-            let _a: OutPort = connecting.bind(Coupling::Passive, addrs[0]);
-            let _b: OutPort = connecting.bind(Coupling::Active, addrs[1]);
-            let connected = connecting.connect(TIMEOUT);
-            println!("A: {:#?}", connected);
+            let p_in: InPort = connecting.bind(Coupling::Passive, addrs[0]);
+            let p_out: OutPort = connecting.bind(Coupling::Active, addrs[1]);
+            let mut connected = connecting.connect(TIMEOUT).unwrap();
+            let identifier = b"sync".to_vec().into();
+            println!("connected {:#?}", &connected);
+            connected.new_component(&PROTOCOL, &identifier, &[p_in.into(), p_out.into()]).unwrap();
+            println!("connected {:#?}", &connected);
         }),
         std::thread::spawn(move || {
             let mut connecting = Connecting::default();
-            let _a: InPort = connecting.bind(Coupling::Active, addrs[0]);
+            let _a: OutPort = connecting.bind(Coupling::Active, addrs[0]);
             let _b: InPort = connecting.bind(Coupling::Passive, addrs[1]);
             let _c: InPort = connecting.bind(Coupling::Active, addrs[2]);
-            let connected = connecting.connect(TIMEOUT);
-            println!("B: {:#?}", connected);
+            let _connected = connecting.connect(TIMEOUT).unwrap();
         }),
         std::thread::spawn(move || {
             let mut connecting = Connecting::default();
             let _a: OutPort = connecting.bind(Coupling::Passive, addrs[2]);
-            let connected = connecting.connect(TIMEOUT);
-            println!("C: {:#?}", connected);
+            let _connected = connecting.connect(TIMEOUT).unwrap();
         }),
     ];
     for h in handles {

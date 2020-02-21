@@ -84,16 +84,20 @@ impl<T> Default for VecStorage<T> {
 impl<T: Debug> Debug for VecStorage<T> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         enum FmtT<'a, T> {
-            Vacant,
-            Reserved,
-            Occupied(&'a T),
+            Vacant(usize),
+            Reserved(usize),
+            Occupied(usize, &'a T),
         };
         impl<T: Debug> Debug for FmtT<'_, T> {
             fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
                 match self {
-                    FmtT::Vacant => write!(f, "Vacant"),
-                    FmtT::Reserved => write!(f, "Reserved"),
-                    FmtT::Occupied(t) => write!(f, "Occupied({:?})", t),
+                    FmtT::Vacant(i) => write!(f, "{} => Vacant", i),
+                    FmtT::Reserved(i) => write!(f, "{} =>Reserved", i),
+                    FmtT::Occupied(i, t) => {
+                        write!(f, "{} => Occupied(", i)?;
+                        t.fmt(f)?;
+                        write!(f, ")")
+                    }
                 }
             }
         }
@@ -103,11 +107,11 @@ impl<T: Debug> Debug for VecStorage<T> {
             // 2. occupied index => valid data is read.
             // 3. bitset bounds are ensured by invariant E.
             if self.occupied.contains(i) {
-                FmtT::Occupied(&*self.data.get_unchecked(i).as_ptr())
+                FmtT::Occupied(i, &*self.data.get_unchecked(i).as_ptr())
             } else if self.vacant.contains(i) {
-                FmtT::Vacant
+                FmtT::Vacant(i)
             } else {
-                FmtT::Reserved
+                FmtT::Reserved(i)
             }
         });
         f.debug_list().entries(iter).finish()
@@ -122,10 +126,10 @@ impl<T> VecStorage<T> {
     // ASSUMES that i in 0..self.data.len()
     unsafe fn get_occupied_unchecked(&self, i: usize) -> Option<&T> {
         if self.occupied.contains(i) {
-            None
-        } else {
             // 2. Invariant A => reading valid ata
             Some(&*self.data.get_unchecked(i).as_ptr())
+        } else {
+            None
         }
     }
     //////////////

@@ -107,7 +107,12 @@ impl From<[u32; 2]> for Pair {
         Pair { entity, property }
     }
 }
-struct BitMatrix {
+impl Default for BitMatrix {
+    fn default() -> Self {
+        Self::new(Pair { entity: 0, property: 0 })
+    }
+}
+pub struct BitMatrix {
     buffer: *mut usize,
     bounds: Pair,
     layout: Layout, // layout of the currently-allocated buffer
@@ -122,29 +127,39 @@ impl Drop for BitMatrix {
 }
 impl Debug for BitMatrix {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        let row_chunks = Self::row_chunks(self.bounds.property as usize);
-        let column_chunks = Self::column_chunks(self.bounds.entity as usize);
-        for property in 0..row_chunks {
-            for entity_chunk in 0..column_chunks {
+        struct FmtRow<'a> {
+            me: &'a BitMatrix,
+            property: usize,
+        };
+        impl Debug for FmtRow<'_> {
+            fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+                let row_chunks = BitMatrix::row_chunks(self.me.bounds.property as usize);
+                let column_chunks = BitMatrix::column_chunks(self.me.bounds.entity as usize);
                 write!(f, "|")?;
-                let mut chunk = unsafe { *self.buffer.add(row_chunks * entity_chunk + property) };
-                let end = if entity_chunk + 1 == column_chunks {
-                    self.bounds.entity % usize_bits() as u32
-                } else {
-                    usize_bits() as u32
-                };
-                for _ in 0..end {
-                    let c = match chunk & 1 {
-                        0 => '0',
-                        _ => '1',
+                for entity_chunk in 0..column_chunks {
+                    let mut chunk =
+                        unsafe { *self.me.buffer.add(row_chunks * entity_chunk + self.property) };
+                    let end = if entity_chunk + 1 == column_chunks {
+                        self.me.bounds.entity % usize_bits() as u32
+                    } else {
+                        usize_bits() as u32
                     };
-                    write!(f, "{}", c)?;
-                    chunk >>= 1;
+                    for _ in 0..end {
+                        let c = match chunk & 1 {
+                            0 => '0',
+                            _ => '1',
+                        };
+                        write!(f, "{}", c)?;
+                        chunk >>= 1;
+                    }
+                    write!(f, "_")?;
                 }
+                Ok(())
             }
-            write!(f, "|\n")?;
         }
-        Ok(())
+        let row_chunks = BitMatrix::row_chunks(self.bounds.property as usize);
+        let iter = (0..row_chunks).map(move |property| FmtRow { me: self, property });
+        f.debug_list().entries(iter).finish()
     }
 }
 impl BitMatrix {
