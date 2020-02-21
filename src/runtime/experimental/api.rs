@@ -595,10 +595,16 @@ impl Connected {
             .ephemeral
             .bit_matrix
             .iter_entities_where_rev(&mut usize_buf, move |p| p[PROP_TO_REMOVE]);
-        self.ephemeral.bit_matrix = Default::default(); // clear matrix
         for machine_index in machine_index_iter {
-            self.ephemeral.machines.swap_remove(machine_index as usize);
+            let machine = self.ephemeral.machines.swap_remove(machine_index as usize);
+            drop(machine);
         }
+
+        // from now on, the number
+        let matrix_bounds = Pair { entity: self.ephemeral.machines.len() as u32 * 2, property: 8 };
+        self.ephemeral.bit_matrix = BitMatrix::new(matrix_bounds); // clear propertties
+
+        // !!! TODO poly run until solution is found
 
         // logically destructure self so we can read and write to different fields interleaved...
         let solution_assignments: Vec<(ChannelId, bool)> = vec![];
