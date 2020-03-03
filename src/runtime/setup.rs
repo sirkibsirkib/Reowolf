@@ -127,7 +127,12 @@ impl Controller {
             round_index: 0,
             logger,
         };
-        let controller = Self { protocol_description, inner, ephemeral: Default::default() };
+        let controller = Self {
+            protocol_description,
+            inner,
+            ephemeral: Default::default(),
+            round_histories: vec![],
+        };
         Ok((controller, native_interface))
     }
 

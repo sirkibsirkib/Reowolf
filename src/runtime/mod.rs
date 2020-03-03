@@ -6,7 +6,7 @@ pub(crate) mod communication;
 pub(crate) mod connector;
 pub(crate) mod endpoint;
 pub mod errors;
-pub mod experimental;
+// pub mod experimental;
 mod serde;
 pub(crate) mod setup;
 
@@ -96,10 +96,17 @@ struct ChannelIdStream {
 }
 
 #[derive(Debug)]
+enum RoundHistory {
+    Consistent(Predicate, (MonoN, PolyN), Vec<(MonoP, PolyP)>),
+    Inconsistent(SolutionStorage, PolyN, Vec<PolyP>),
+}
+
+#[derive(Debug)]
 struct Controller {
     protocol_description: Arc<ProtocolD>,
     inner: ControllerInner,
     ephemeral: ControllerEphemeral,
+    round_histories: Vec<RoundHistory>,
 }
 #[derive(Debug)]
 struct ControllerInner {

@@ -1457,7 +1457,7 @@ impl Store {
                         let var = var.declaration.unwrap();
                         subject = self.map.get(&var).unwrap();
                     }
-                    _ => unreachable!(),
+                    q => unreachable!("Reached {:?}", q),
                 }
                 match subject.get(&index) {
                     Some(value) => Ok(value),
@@ -1472,7 +1472,7 @@ impl Store {
                         let var = var.declaration.unwrap();
                         subject = self.map.get(&var).unwrap();
                     }
-                    _ => unreachable!(),
+                    q => unreachable!("Reached {:?}", q),
                 }
                 match subject.length() {
                     Some(value) => Ok(value),

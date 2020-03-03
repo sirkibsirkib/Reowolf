@@ -79,6 +79,27 @@ primitive fifo_1(msg m, in i, out o) {
 composite fifo_1_e(in i, out o) {
     new fifo_1(null, i, o);
 }
+primitive samelen(in a, in b, out c) {
+    synchronous {
+        msg m = get(a);
+        msg n = get(b);
+        assert(m.length == n.length);
+        put(c, m);
+    }
+}
+primitive repl2(in a, out b, out c) {
+    synchronous {
+        msg m = get(a);
+        put(b, m);
+        put(c, m);
+    }
+}
+composite samelen_repl(in a, out b) {
+    channel c -> d;   
+    channel e -> f;
+    new samelen(a, f, c);
+    new repl2(d, b, e);
+}
 ";
 
 #[test]
@@ -676,6 +697,80 @@ fn connector_fifo_1_e() {
                 assert_eq!(Ok(()), x.get(1));
                 assert_eq!(Ok(0), x.sync(timeout));
                 assert_eq!(Ok(b"message~" as &[u8]), x.read_gotten(1));
+            }
+        },
+    ]));
+}
+
+#[test]
+#[should_panic]
+fn connector_causal_loop() {
+    /*
+        /-->\      /-->P|A-->\      /-->\
+    Alice   exchange         exchange   Bob
+        \<--/      \<--P|A<--/      \<--/
+    */
+    let timeout = Duration::from_millis(1_500);
+    let addrs = [next_addr(), next_addr()];
+    const N: usize = 1;
+    assert!(run_connector_set(&[
+        //
+        &|x| {
+            // Alice
+            x.configure(PDL, b"exchange").unwrap();
+            x.bind_port(0, Passive(addrs[0])).unwrap(); // peer out
+            x.bind_port(1, Passive(addrs[1])).unwrap(); // peer in
+            x.bind_port(2, Native).unwrap(); // native in
+            x.bind_port(3, Native).unwrap(); // native out
+            x.connect(timeout).unwrap();
+            for _ in 0..N {
+                assert_eq!(Ok(()), x.put(0, b"A->B".to_vec()));
+                assert_eq!(Ok(()), x.get(1));
+                assert_eq!(Ok(0), x.sync(timeout));
+                assert_eq!(Ok(b"B->A" as &[u8]), x.read_gotten(1));
+            }
+        },
+        &|x| {
+            // Bob
+            x.configure(PDL, b"exchange").unwrap();
+            x.bind_port(0, Active(addrs[1])).unwrap(); // peer out
+            x.bind_port(1, Active(addrs[0])).unwrap(); // peer in
+            x.bind_port(2, Native).unwrap(); // native in
+            x.bind_port(3, Native).unwrap(); // native out
+            x.connect(timeout).unwrap();
+            for _ in 0..N {
+                assert_eq!(Ok(()), x.put(0, b"B->A".to_vec()));
+                assert_eq!(Ok(()), x.get(1));
+                assert_eq!(Ok(0), x.sync(timeout));
+                assert_eq!(Ok(b"A->B" as &[u8]), x.read_gotten(1));
+            }
+        },
+    ]));
+}
+
+#[test]
+#[should_panic]
+fn connector_causal_loop2() {
+    /*
+        /-->\     /<---\
+    Alice   samelen-->repl
+        \<-------------/
+    */
+    let timeout = Duration::from_millis(1_500);
+    // let addrs = [next_addr(), next_addr()];
+    const N: usize = 1;
+    assert!(run_connector_set(&[
+        //
+        &|x| {
+            // Alice
+            x.configure(PDL, b"samelen_repl").unwrap();
+            x.bind_port(0, Native).unwrap();
+            x.bind_port(1, Native).unwrap();
+            x.connect(timeout).unwrap();
+            for _ in 0..N {
+                assert_eq!(Ok(()), x.put(0, b"foo".to_vec()));
+                assert_eq!(Ok(()), x.get(1));
+                assert_eq!(Ok(0), x.sync(timeout));
             }
         },
     ]));

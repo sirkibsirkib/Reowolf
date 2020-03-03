@@ -41,7 +41,7 @@ pub enum Polarity {
     Getter, // input port (from the perspective of the component)
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Copy, Clone, Debug)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Copy, Clone)]
 #[repr(C)]
 pub struct Port(pub usize); // ports are COPY
 pub type Key = Port;
@@ -111,6 +111,11 @@ pub trait PolyContext {
 }
 
 ///////////////////// IMPL /////////////////////
+impl Debug for Port {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "Port({})", self.0)
+    }
+}
 impl Key {
     pub fn from_raw(raw: usize) -> Self {
         Self(raw)
