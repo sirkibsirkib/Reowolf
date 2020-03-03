@@ -26,9 +26,14 @@ impl Controller {
                 let mono_p = poly_p.choose_mono(&decision).unwrap();
                 (mono_p, poly_p)
             })
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
         self.inner.mono_ps.extend(p_pairs.iter().map(|p_pair| p_pair.0.clone()));
-        self.round_histories.push(RoundHistory::Consistent(decision.clone(), n_pair, p_pairs));
+        self.round_histories.push(RoundHistory::Consistent {
+            decision: decision.clone(),
+            native_component: n_pair,
+            protocol_components: p_pairs,
+        });
         let announcement =
             CommMsgContents::Announce { oracle: decision }.into_msg(self.inner.round_index);
         for &child_ekey in self.inner.family.children_ekeys.iter() {
@@ -143,29 +148,34 @@ impl Controller {
         deadline: Instant,
         sync_batches: Option<impl Iterator<Item = SyncBatch>>,
     ) -> Result<(), SyncErr> {
-        if !self.consistent() {
-            // was previously inconsistent
-            return Err(SyncErr::Inconsistent);
-        }
-        match self.sync_round_inner(deadline, sync_batches) {
-            Ok(()) => Ok(()),
-            Err(e) => {
-                log!(
-                    &mut self.inner.logger,
-                    "/\\/\\/\\/\\/\\/ Sync round failed! Preparing for diagnosis...",
-                );
-                let h = RoundHistory::Inconsistent(
-                    std::mem::take(&mut self.ephemeral.solution_storage),
-                    self.ephemeral.poly_n.take().unwrap(),
-                    std::mem::take(&mut self.ephemeral.poly_ps),
-                );
-                self.round_histories.push(h);
-                for (round_index, round) in self.round_histories.iter().enumerate() {
-                    log!(&mut self.inner.logger, "round {}:{:#?}\n", round_index, round);
+        if self.consistent() {
+            match self.sync_round_inner(deadline, sync_batches) {
+                Ok(()) => return Ok(()),
+                Err(error) => {
+                    log!(
+                        &mut self.inner.logger,
+                        "/\\/\\/\\/\\/\\/ Sync round failed! Preparing for diagnosis...",
+                    );
+                    let h = RoundHistory::Inconsistent {
+                        error,
+                        subtree_solutions: std::mem::take(&mut self.ephemeral.solution_storage),
+                        native_component: self.ephemeral.poly_n.take().unwrap(),
+                        protocol_components: std::mem::take(&mut self.ephemeral.poly_ps)
+                            .into_boxed_slice(),
+                    };
+                    self.round_histories.push(h);
+                    for (round_index, round) in self.round_histories.iter().enumerate() {
+                        log!(&mut self.inner.logger, "round {}:{:#?}\n", round_index, round);
+                    }
                 }
-
-                Err(e)
             }
+        }
+        if let Some(RoundHistory::Inconsistent { error, .. }) =
+            self.round_histories.iter().rev().next()
+        {
+            Err(error.clone())
+        } else {
+            unreachable!()
         }
     }
 

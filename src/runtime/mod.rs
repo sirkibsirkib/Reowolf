@@ -97,8 +97,17 @@ struct ChannelIdStream {
 
 #[derive(Debug)]
 enum RoundHistory {
-    Consistent(Predicate, (MonoN, PolyN), Vec<(MonoP, PolyP)>),
-    Inconsistent(SolutionStorage, PolyN, Vec<PolyP>),
+    Consistent {
+        decision: Predicate,
+        native_component: (MonoN, PolyN),
+        protocol_components: Box<[(MonoP, PolyP)]>,
+    },
+    Inconsistent {
+        error: SyncErr,
+        subtree_solutions: SolutionStorage,
+        native_component: PolyN,
+        protocol_components: Box<[PolyP]>,
+    },
 }
 
 #[derive(Debug)]
