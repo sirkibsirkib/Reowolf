@@ -37,6 +37,8 @@ impl<R: Read> Read for MonitoredReader<R> {
 
 /////////////////////////////////////////
 
+struct VarLenInt(u64);
+
 macro_rules! ser_seq {
     ( $w:expr ) => {{
         io::Result::Ok(())
@@ -50,6 +52,25 @@ macro_rules! ser_seq {
     }};
 }
 /////////////////////////////////////////
+
+impl<W: Write> Ser<bool> for W {
+    fn ser(&mut self, t: &bool) -> Result<(), std::io::Error> {
+        self.ser(&match t {
+            true => b'T',
+            false => b'F',
+        })
+    }
+}
+impl<R: Read> De<bool> for R {
+    fn de(&mut self) -> Result<bool, std::io::Error> {
+        let b: u8 = self.de()?;
+        Ok(match b {
+            b'T' => true,
+            b'F' => false,
+            _ => return Err(InvalidData.into()),
+        })
+    }
+}
 
 impl<W: Write> Ser<u8> for W {
     fn ser(&mut self, t: &u8) -> Result<(), std::io::Error> {
@@ -97,7 +118,7 @@ impl<R: Read> De<u64> for R {
 
 impl<W: Write> Ser<Payload> for W {
     fn ser(&mut self, t: &Payload) -> Result<(), std::io::Error> {
-        self.ser(&ZigZag(t.len() as u64))?;
+        self.ser(&VarLenInt(t.len() as u64))?;
         for byte in t {
             self.ser(byte)?;
         }
@@ -106,7 +127,7 @@ impl<W: Write> Ser<Payload> for W {
 }
 impl<R: Read> De<Payload> for R {
     fn de(&mut self) -> Result<Payload, std::io::Error> {
-        let ZigZag(len) = self.de()?;
+        let VarLenInt(len) = self.de()?;
         let mut x = Vec::with_capacity(len as usize);
         for _ in 0..len {
             x.push(self.de()?);
@@ -115,55 +136,35 @@ impl<R: Read> De<Payload> for R {
     }
 }
 
-struct ZigZag(u64);
-impl<W: Write> Ser<ZigZag> for W {
-    fn ser(&mut self, t: &ZigZag) -> Result<(), std::io::Error> {
+impl<W: Write> Ser<VarLenInt> for W {
+    fn ser(&mut self, t: &VarLenInt) -> Result<(), std::io::Error> {
         integer_encoding::VarIntWriter::write_varint(self, t.0).map(|_| ())
     }
 }
-impl<R: Read> De<ZigZag> for R {
-    fn de(&mut self) -> Result<ZigZag, std::io::Error> {
-        integer_encoding::VarIntReader::read_varint(self).map(ZigZag)
+impl<R: Read> De<VarLenInt> for R {
+    fn de(&mut self) -> Result<VarLenInt, std::io::Error> {
+        integer_encoding::VarIntReader::read_varint(self).map(VarLenInt)
     }
 }
 
 impl<W: Write> Ser<ChannelId> for W {
     fn ser(&mut self, t: &ChannelId) -> Result<(), std::io::Error> {
         self.ser(&t.controller_id)?;
-        self.ser(&ZigZag(t.channel_index as u64))
+        self.ser(&VarLenInt(t.channel_index as u64))
     }
 }
 impl<R: Read> De<ChannelId> for R {
     fn de(&mut self) -> Result<ChannelId, std::io::Error> {
         Ok(ChannelId {
             controller_id: self.de()?,
-            channel_index: De::<ZigZag>::de(self)?.0 as ChannelIndex,
-        })
-    }
-}
-
-impl<W: Write> Ser<bool> for W {
-    fn ser(&mut self, t: &bool) -> Result<(), std::io::Error> {
-        self.ser(&match t {
-            true => b'T',
-            false => b'F',
-        })
-    }
-}
-impl<R: Read> De<bool> for R {
-    fn de(&mut self) -> Result<bool, std::io::Error> {
-        let b: u8 = self.de()?;
-        Ok(match b {
-            b'T' => true,
-            b'F' => false,
-            _ => return Err(InvalidData.into()),
+            channel_index: De::<VarLenInt>::de(self)?.0 as ChannelIndex,
         })
     }
 }
 
 impl<W: Write> Ser<Predicate> for W {
     fn ser(&mut self, t: &Predicate) -> Result<(), std::io::Error> {
-        self.ser(&ZigZag(t.assigned.len() as u64))?;
+        self.ser(&VarLenInt(t.assigned.len() as u64))?;
         for (channel_id, boolean) in &t.assigned {
             ser_seq![self, channel_id, boolean]?;
         }
@@ -172,7 +173,7 @@ impl<W: Write> Ser<Predicate> for W {
 }
 impl<R: Read> De<Predicate> for R {
     fn de(&mut self) -> Result<Predicate, std::io::Error> {
-        let ZigZag(len) = self.de()?;
+        let VarLenInt(len) = self.de()?;
         let mut assigned = BTreeMap::<ChannelId, bool>::default();
         for _ in 0..len {
             assigned.insert(self.de()?, self.de()?);
@@ -238,20 +239,22 @@ impl<W: Write> Ser<Msg> for W {
         use {CommMsgContents::*, SetupMsg::*};
         match t {
             Msg::SetupMsg(s) => match s {
+                // [flag, data]
                 ChannelSetup { info } => ser_seq![self, &0u8, info],
                 LeaderEcho { maybe_leader } => ser_seq![self, &1u8, maybe_leader],
                 LeaderAnnounce { leader } => ser_seq![self, &2u8, leader],
                 YouAreMyParent => ser_seq![self, &3u8],
             },
             Msg::CommMsg(CommMsg { round_index, contents }) => {
-                let zig = &ZigZag(*round_index as u64);
+                // [flag, round_num, data]
+                let varlenint = &VarLenInt(*round_index as u64);
                 match contents {
                     SendPayload { payload_predicate, payload } => {
-                        ser_seq![self, &4u8, zig, payload_predicate, payload]
+                        ser_seq![self, &4u8, varlenint, payload_predicate, payload]
                     }
-                    Elaborate { partial_oracle } => ser_seq![self, &5u8, zig, partial_oracle],
-                    Announce { decision } => ser_seq![self, &6u8, zig, decision],
-                    Failure => ser_seq![self, &7u8],
+                    Elaborate { partial_oracle } => ser_seq![self, &5u8, varlenint, partial_oracle],
+                    Announce { decision } => ser_seq![self, &6u8, varlenint, decision],
+                    Failure => ser_seq![self, &7u8, varlenint],
                 }
             }
         }
@@ -263,23 +266,26 @@ impl<R: Read> De<Msg> for R {
         let b: u8 = self.de()?;
         Ok(match b {
             0..=3 => Msg::SetupMsg(match b {
-                0 => ChannelSetup { info: self.de()? },
-                1 => LeaderEcho { maybe_leader: self.de()? },
-                2 => LeaderAnnounce { leader: self.de()? },
-                3 => YouAreMyParent,
+                // [flag, data]
+                0u8 => ChannelSetup { info: self.de()? },
+                1u8 => LeaderEcho { maybe_leader: self.de()? },
+                2u8 => LeaderAnnounce { leader: self.de()? },
+                3u8 => YouAreMyParent,
                 _ => unreachable!(),
             }),
-            _ => {
-                let ZigZag(zig) = self.de()?;
+            4..=7 => {
+                // [flag, round_num, data]
+                let VarLenInt(varlenint) = self.de()?;
                 let contents = match b {
-                    4 => SendPayload { payload_predicate: self.de()?, payload: self.de()? },
-                    5 => Elaborate { partial_oracle: self.de()? },
-                    6 => Announce { decision: self.de()? },
-                    7 => Failure,
-                    _ => return Err(InvalidData.into()),
+                    4u8 => SendPayload { payload_predicate: self.de()?, payload: self.de()? },
+                    5u8 => Elaborate { partial_oracle: self.de()? },
+                    6u8 => Announce { decision: self.de()? },
+                    7u8 => Failure,
+                    _ => unreachable!(),
                 };
-                Msg::CommMsg(CommMsg { round_index: zig as usize, contents })
+                Msg::CommMsg(CommMsg { round_index: varlenint as usize, contents })
             }
+            _ => return Err(InvalidData.into()),
         })
     }
 }

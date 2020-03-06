@@ -115,7 +115,7 @@ impl Connector {
         if native_polarity != Putter {
             return Err(WrongPolarity);
         }
-        let sync_batch = connected.sync_batches.iter_mut().last().unwrap();
+        let sync_batch = connected.sync_batches.iter_mut().last().expect("no sync batch!");
         if sync_batch.puts.contains_key(&ekey) {
             return Err(DuplicateOperation);
         }
@@ -134,7 +134,7 @@ impl Connector {
         if native_polarity != Getter {
             return Err(WrongPolarity);
         }
-        let sync_batch = connected.sync_batches.iter_mut().last().unwrap();
+        let sync_batch = connected.sync_batches.iter_mut().last().expect("no sync batch!");
         if sync_batch.gets.contains(&ekey) {
             return Err(DuplicateOperation);
         }
@@ -159,9 +159,11 @@ impl Connector {
         };
 
         // do the synchronous round!
-        connected.controller.sync_round(deadline, Some(connected.sync_batches.drain(..)))?;
+        let res =
+            connected.controller.sync_round(Some(deadline), Some(connected.sync_batches.drain(..)));
         connected.sync_batches.push(SyncBatch::default());
-        Ok(connected.controller.inner.mono_n.result.as_mut().unwrap().0)
+        res?;
+        Ok(connected.controller.inner.mono_n.result.as_mut().expect("qqqs").0)
     }
 
     pub fn read_gotten(&self, native_port_index: usize) -> Result<&[u8], ReadGottenErr> {

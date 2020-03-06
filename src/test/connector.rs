@@ -775,3 +775,58 @@ fn connector_causal_loop2() {
         },
     ]));
 }
+
+#[test]
+fn connector_recover() {
+    let connect_timeout = Duration::from_millis(1500);
+    let comm_timeout = Duration::from_millis(300);
+    let addrs = [next_addr()];
+    fn putter_does(i: usize) -> bool {
+        i % 3 == 0
+    }
+    fn getter_does(i: usize) -> bool {
+        i % 2 == 0
+    }
+    fn expect_res(i: usize) -> Result<usize, SyncErr> {
+        if putter_does(i) && getter_does(i) {
+            Ok(0)
+        } else {
+            Err(SyncErr::Timeout)
+        }
+    }
+    const N: usize = 11;
+    assert!(run_connector_set(&[
+        //
+        &|x| {
+            // Alice
+            x.configure(PDL, b"forward").unwrap();
+            x.bind_port(0, Native).unwrap();
+            x.bind_port(1, Passive(addrs[0])).unwrap();
+            x.connect(connect_timeout).unwrap();
+
+            for i in 0..N {
+                if putter_does(i) {
+                    assert_eq!(Ok(()), x.put(0, b"msg".to_vec()));
+                }
+                assert_eq!(expect_res(i), x.sync(comm_timeout));
+            }
+        },
+        &|x| {
+            // Bob
+            x.configure(PDL, b"forward").unwrap();
+            x.bind_port(0, Active(addrs[0])).unwrap();
+            x.bind_port(1, Native).unwrap();
+            x.connect(connect_timeout).unwrap();
+
+            for i in 0..N {
+                if getter_does(i) {
+                    assert_eq!(Ok(()), x.get(0));
+                }
+                assert_eq!(expect_res(i), x.sync(comm_timeout));
+                if expect_res(i).is_ok() {
+                    assert_eq!(Ok(b"msg" as &[u8]), x.read_gotten(0));
+                }
+            }
+        },
+    ]));
+}
