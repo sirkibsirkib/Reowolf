@@ -128,10 +128,29 @@ impl Controller {
         }
         Ok(PolyN { ekeys, branches })
     }
+    pub fn sync_round(
+        &mut self,
+        deadline: Option<Instant>,
+        sync_batches: Option<impl Iterator<Item = SyncBatch>>,
+    ) -> Result<(), SyncErr> {
+        if let Some(e) = self.unrecoverable_error {
+            return Err(e.clone());
+        }
+        self.sync_round_inner(deadline, sync_batches).map_err(move |e| match e {
+            SyncErr::Timeout => e, // this isn't unrecoverable
+            _ => {
+                // Must set unrecoverable error! and tear down our net channels
+                self.unrecoverable_error = Some(e);
+                self.ephemeral.clear();
+                self.inner.endpoint_exts = Default::default();
+                e
+            }
+        })
+    }
 
     // Runs a synchronous round until all the actors are in decided state OR 1+ are inconsistent.
     // If a native requires setting up, arg `sync_batches` is Some, and those are used as the sync batches.
-    pub fn sync_round(
+    fn sync_round_inner(
         &mut self,
         mut deadline: Option<Instant>,
         sync_batches: Option<impl Iterator<Item = SyncBatch>>,
@@ -142,6 +161,7 @@ impl Controller {
             self.inner.round_index
         );
         assert!(self.ephemeral.is_clear());
+        assert!(self.unrecoverable_error.is_none());
 
         // 1. Run the Mono for each Mono actor (stored in `self.mono_ps`).
         //    Some actors are dropped. some new actors are created.
