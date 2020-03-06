@@ -96,26 +96,11 @@ struct ChannelIdStream {
 }
 
 #[derive(Debug)]
-enum RoundHistory {
-    Consistent {
-        decision: Predicate,
-        native_component: (MonoN, PolyN),
-        protocol_components: Box<[(MonoP, PolyP)]>,
-    },
-    Inconsistent {
-        error: SyncErr,
-        subtree_solutions: SolutionStorage,
-        native_component: PolyN,
-        protocol_components: Box<[PolyP]>,
-    },
-}
-
-#[derive(Debug)]
 struct Controller {
     protocol_description: Arc<ProtocolD>,
     inner: ControllerInner,
     ephemeral: ControllerEphemeral,
-    round_histories: Vec<RoundHistory>,
+    unrecoverable_error: Option<SyncErr>, // prevents future calls to Sync
 }
 #[derive(Debug)]
 struct ControllerInner {

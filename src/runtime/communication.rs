@@ -264,18 +264,30 @@ impl Controller {
             return Ok(());
         }
 
-        // 4. Receive incoming messages until the DECISION is made
+        // 4. Receive incoming messages until the DECISION is made OR some unrecoverable error
         log!(&mut self.inner.logger, "`No decision yet`. Time to recv messages");
         self.undelay_all();
         'recv_loop: loop {
             log!(&mut self.inner.logger, "`POLLING` with deadline {:?}...", deadline);
             let received = match deadline {
+                None => {
+                    // we have personally timed out. perform a "long" poll.
+                    self.recv(Instant::now() + Duration::from_secs(10))?.expect("DRIED UP")
+                }
                 Some(d) => match self.recv(d)? {
+                    // we have not yet timed out. performed a time-limited poll
                     Some(received) => received,
                     None => {
+                        // timed out! send a FAILURE message to the sink,
+                        // and henceforth don't time out on polling.
                         deadline = None;
                         match self.inner.family.parent_ekey {
+                            None => {
+                                // I am the sink! announce failure and return.
+                                return self.end_round_with_decision(Decision::Failure);
+                            }
                             Some(parent_ekey) => {
+                                // I am not the sink! send a failure message.
                                 let announcement = Msg::CommMsg(CommMsg {
                                     round_index: self.inner.round_index,
                                     contents: CommMsgContents::Failure,
@@ -292,13 +304,11 @@ impl Controller {
                                     .expect("ss")
                                     .endpoint
                                     .send(announcement.clone())?;
+                                continue; // poll some more
                             }
-                            None => return self.end_round_with_decision(Decision::Failure),
                         }
-                        continue;
                     }
                 },
-                None => self.recv(Instant::now() + Duration::from_secs(2))?.expect("DRIED UP"),
             };
             log!(&mut self.inner.logger, "::: message {:?}...", &received);
             let current_content = match received.msg {
@@ -698,9 +708,3 @@ impl PolyContext for BranchPContext<'_, '_> {
         val
     }
 }
-
-/*
-invariant: Controller.inner has stable MonoN/P states for which it will start the
-
-
-*/

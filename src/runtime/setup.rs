@@ -131,7 +131,8 @@ impl Controller {
             protocol_description,
             inner,
             ephemeral: Default::default(),
-            round_histories: vec![],
+            // round_histories: vec![],
+            unrecoverable_error: None,
         };
         Ok((controller, native_interface))
     }
