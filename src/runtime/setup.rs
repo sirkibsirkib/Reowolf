@@ -100,7 +100,7 @@ impl Controller {
         let (mut messenger_state, mut endpoint_exts) =
             Self::finish_endpoint_ext_todos(major, &mut logger, endpoint_ext_todos, deadline)?;
 
-        let n_mono = Some(MonoN { ekeys: ekeys_native.into_iter().collect(), result: None });
+        let n_mono = MonoN { ekeys: ekeys_native.into_iter().collect(), result: None };
         let p_monos = vec![MonoP {
             state: protocol_description.new_main_component(main_component, &ekeys_proto),
             ekeys: ekeys_proto.into_iter().collect(),

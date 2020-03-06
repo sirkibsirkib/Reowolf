@@ -161,10 +161,7 @@ impl Connector {
         // do the synchronous round!
         connected.controller.sync_round(deadline, Some(connected.sync_batches.drain(..)))?;
         connected.sync_batches.push(SyncBatch::default());
-
-        let mono_n = connected.controller.inner.mono_n.as_mut().unwrap();
-        let result = mono_n.result.as_mut().unwrap();
-        Ok(result.0)
+        Ok(connected.controller.inner.mono_n.result.as_mut().unwrap().0)
     }
 
     pub fn read_gotten(&self, native_port_index: usize) -> Result<&[u8], ReadGottenErr> {
@@ -178,8 +175,7 @@ impl Connector {
         if polarity != Getter {
             return Err(WrongPolarity);
         }
-        let mono_n = connected.controller.inner.mono_n.as_ref().expect("controller has no mono_n?");
-        let result = mono_n.result.as_ref().ok_or(NoPreviousRound)?;
+        let result = connected.controller.inner.mono_n.result.as_ref().ok_or(NoPreviousRound)?;
         let payload = result.1.get(&key).ok_or(DidNotGet)?;
         Ok(payload)
     }

@@ -18,6 +18,12 @@ pub struct EndpointInfo {
     pub channel_id: ChannelId,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) enum Decision {
+    Failure,
+    Success(Predicate),
+}
+
 #[derive(Clone, Debug)]
 pub(crate) enum Msg {
     SetupMsg(SetupMsg),
@@ -45,8 +51,9 @@ pub(crate) struct CommMsg {
 #[derive(Clone, Debug)]
 pub(crate) enum CommMsgContents {
     SendPayload { payload_predicate: Predicate, payload: Payload },
-    Elaborate { partial_oracle: Predicate },
-    Announce { oracle: Predicate },
+    Elaborate { partial_oracle: Predicate }, // SINKWARD
+    Failure,                                 // SINKWARD
+    Announce { decision: Decision },         // SINKAWAYS
 }
 
 pub struct NetworkEndpoint {

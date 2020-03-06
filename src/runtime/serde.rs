@@ -1,6 +1,6 @@
 use crate::common::*;
 use crate::runtime::{
-    endpoint::{CommMsg, CommMsgContents, EndpointInfo, Msg, SetupMsg},
+    endpoint::{CommMsg, CommMsgContents, Decision, EndpointInfo, Msg, SetupMsg},
     Predicate,
 };
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
@@ -180,6 +180,27 @@ impl<R: Read> De<Predicate> for R {
         Ok(Predicate { assigned })
     }
 }
+impl<W: Write> Ser<Decision> for W {
+    fn ser(&mut self, t: &Decision) -> Result<(), std::io::Error> {
+        match t {
+            Decision::Failure => self.ser(&b'F'),
+            Decision::Success(predicate) => {
+                self.ser(&b'S')?;
+                self.ser(predicate)
+            }
+        }
+    }
+}
+impl<R: Read> De<Decision> for R {
+    fn de(&mut self) -> Result<Decision, std::io::Error> {
+        let b: u8 = self.de()?;
+        Ok(match b {
+            b'F' => Decision::Failure,
+            b'S' => Decision::Success(self.de()?),
+            _ => return Err(InvalidData.into()),
+        })
+    }
+}
 
 impl<W: Write> Ser<Polarity> for W {
     fn ser(&mut self, t: &Polarity) -> Result<(), std::io::Error> {
@@ -229,7 +250,8 @@ impl<W: Write> Ser<Msg> for W {
                         ser_seq![self, &4u8, zig, payload_predicate, payload]
                     }
                     Elaborate { partial_oracle } => ser_seq![self, &5u8, zig, partial_oracle],
-                    Announce { oracle } => ser_seq![self, &6u8, zig, oracle],
+                    Announce { decision } => ser_seq![self, &6u8, zig, decision],
+                    Failure => ser_seq![self, &7u8],
                 }
             }
         }
@@ -252,7 +274,8 @@ impl<R: Read> De<Msg> for R {
                 let contents = match b {
                     4 => SendPayload { payload_predicate: self.de()?, payload: self.de()? },
                     5 => Elaborate { partial_oracle: self.de()? },
-                    6 => Announce { oracle: self.de()? },
+                    6 => Announce { decision: self.de()? },
+                    7 => Failure,
                     _ => return Err(InvalidData.into()),
                 };
                 Msg::CommMsg(CommMsg { round_index: zig as usize, contents })
@@ -260,49 +283,3 @@ impl<R: Read> De<Msg> for R {
         })
     }
 }
-
-/////////////////
-
-// #[test]
-// fn my_serde() -> Result<(), std::io::Error> {
-//     let payload_predicate = Predicate {
-//         assigned: maplit::btreemap! { ChannelId {controller_id: 3, channel_index: 9} => false  },
-//     };
-//     let msg = Msg::CommMsg(CommMsg {
-//         round_index: !0,
-//         contents: CommMsgContents::SendPayload {
-//             payload_predicate,
-//             payload: (0..).take(2).collect(),
-//         },
-//     });
-//     let mut v = vec![];
-//     v.ser(&msg)?;
-//     print!("[");
-//     for (i, &x) in v.iter().enumerate() {
-//         print!("{:02x}", x);
-//         if i % 4 == 3 {
-//             print!(" ");
-//         }
-//     }
-//     println!("]");
-
-//     let msg2: Msg = (&v[..]).de()?;
-//     println!("msg2 {:#?}", msg2);
-//     Ok(())
-// }
-
-// #[test]
-// fn varint() {
-//     let mut v = vec![];
-//     v.ser(&ZigZag(!0)).unwrap();
-//     for (i, x) in v.iter_mut().enumerate() {
-//         print!("{:02x}", x);
-//         if i % 4 == 3 {
-//             print!(" ");
-//         }
-//     }
-//     *v.iter_mut().last().unwrap() |= 3;
-
-//     let ZigZag(x) = De::de(&mut &v[..]).unwrap();
-//     println!("");
-// }

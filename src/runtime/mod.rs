@@ -123,8 +123,8 @@ struct ControllerInner {
     channel_id_stream: ChannelIdStream,
     endpoint_exts: Arena<EndpointExt>,
     messenger_state: MessengerState,
-    mono_n: Option<MonoN>,
-    mono_ps: Vec<MonoP>,
+    mono_n: MonoN,       // state at next round start
+    mono_ps: Vec<MonoP>, // state at next round start
     family: ControllerFamily,
     logger: String,
 }
@@ -135,6 +135,7 @@ struct ControllerEphemeral {
     solution_storage: SolutionStorage,
     poly_n: Option<PolyN>,
     poly_ps: Vec<PolyP>,
+    mono_ps: Vec<MonoP>,
     ekey_to_holder: HashMap<Key, PolyId>,
 }
 
@@ -168,6 +169,7 @@ pub(crate) enum SubtreeId {
 pub(crate) struct MonoPContext<'a> {
     inner: &'a mut ControllerInner,
     ekeys: &'a mut HashSet<Key>,
+    mono_ps: &'a mut Vec<MonoP>,
 }
 pub(crate) struct PolyPContext<'a> {
     my_subtree_id: SubtreeId,
@@ -246,15 +248,10 @@ trait Messengerlike {
             }
         }
     }
-
-    // attempt to receive a message from one of the endpoints before the deadline
-    fn recv_until(
-        &mut self,
-        deadline: Option<Instant>,
-    ) -> Result<Option<ReceivedMsg>, MessengerRecvErr> {
+    fn recv_blocking(&mut self) -> Result<ReceivedMsg, MessengerRecvErr> {
         // try get something buffered
         if let Some(x) = self.get_state_mut().undelayed.pop() {
-            return Ok(Some(x));
+            return Ok(x);
         }
 
         loop {
@@ -267,19 +264,18 @@ trait Messengerlike {
                 {
                     // this endpoint MAY still have messages! check again in future
                     self.get_state_mut().polled_undrained.insert(eekey);
-                    return Ok(Some(ReceivedMsg { recipient: eekey, msg }));
+                    return Ok(ReceivedMsg { recipient: eekey, msg });
                 }
             }
 
             let state = self.get_state_mut();
-            match state.poll_events_until(deadline) {
-                Ok(()) => {
-                    for e in state.events.iter() {
-                        state.polled_undrained.insert(Key::from_token(e.token()));
-                    }
-                }
-                Err(PollDeadlineErr::PollingFailed) => return Err(MessengerRecvErr::PollingFailed),
-                Err(PollDeadlineErr::Timeout) => return Ok(None),
+
+            state
+                .poll
+                .poll(&mut state.events, None)
+                .map_err(|_| MessengerRecvErr::PollingFailed)?;
+            for e in state.events.iter() {
+                state.polled_undrained.insert(Key::from_token(e.token()));
             }
         }
     }
@@ -357,32 +353,12 @@ impl ChannelIdStream {
 }
 
 impl MessengerState {
-    fn with_event_capacity(event_capacity: usize) -> Result<Self, std::io::Error> {
-        Ok(Self {
-            poll: Poll::new()?,
-            events: Events::with_capacity(event_capacity),
-            delayed: Default::default(),
-            undelayed: Default::default(),
-            polled_undrained: Default::default(),
-        })
-    }
     // does NOT guarantee that events is non-empty
     fn poll_events(&mut self, deadline: Instant) -> Result<(), PollDeadlineErr> {
         use PollDeadlineErr::*;
         self.events.clear();
         let poll_timeout = deadline.checked_duration_since(Instant::now()).ok_or(Timeout)?;
         self.poll.poll(&mut self.events, Some(poll_timeout)).map_err(|_| PollingFailed)?;
-        Ok(())
-    }
-    fn poll_events_until(&mut self, deadline: Option<Instant>) -> Result<(), PollDeadlineErr> {
-        use PollDeadlineErr::*;
-        self.events.clear();
-        let poll_timeout = if let Some(d) = deadline {
-            Some(d.checked_duration_since(Instant::now()).ok_or(Timeout)?)
-        } else {
-            None
-        };
-        self.poll.poll(&mut self.events, poll_timeout).map_err(|_| PollingFailed)?;
         Ok(())
     }
 }
