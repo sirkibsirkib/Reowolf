@@ -1,0 +1,33 @@
+primitive forward(in i, out o) {
+	while(true) synchronous {
+		put(o, get(i));
+	}
+}
+primitive sync(in i, out o) {
+	while(true) synchronous {
+		if(fires(i)) {
+			put(o, get(i));
+		}
+	}
+}
+
+primitive sync_two(in ia, in ib, out oa, out ob) {
+	while(true) synchronous {
+		if (fires(ia)) {
+			put(oa, get(ia));
+			put(ob, get(ib));
+		}
+	}
+}
+
+composite recovery_bob(in i, out o) {
+	new sync(i, o);
+}
+
+primitive xor_three(in ai, out ao, in bi, out bo, in ci, out co) {
+	synchronous {
+		if      (fires(ai)) put(ao, get(ai));
+		else if (fires(bi)) put(bo, get(bi));
+		else                put(co, get(ci)); 
+	}
+}

@@ -3,7 +3,7 @@
 #include "../utility.c"
 
 int main() { // BOB!
-	char * pdl = buffer_pdl("forward.pdl");
+	char * pdl = buffer_pdl("eg_protocols.pdl");
 	
 	// BOB
 	Connector* c = connector_new();

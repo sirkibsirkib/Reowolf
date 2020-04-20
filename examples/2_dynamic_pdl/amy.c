@@ -5,7 +5,7 @@
 #include "../utility.c"
 
 int main() { // AMY
-	char * pdl = buffer_pdl("forward.pdl");
+	char * pdl = buffer_pdl("eg_protocols.pdl");
 	
 	char msg_buf[128];
 	memset(msg_buf, 0, 128);

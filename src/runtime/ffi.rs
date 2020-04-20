@@ -278,7 +278,10 @@ pub unsafe extern "C" fn connector_put(
 /// # Safety
 /// TODO
 #[no_mangle]
-pub unsafe extern "C" fn connector_get(connector: *mut Connector, proto_port_index: c_uint) -> c_int {
+pub unsafe extern "C" fn connector_get(
+    connector: *mut Connector,
+    proto_port_index: c_uint,
+) -> c_int {
     let mut b = Box::from_raw(connector); // unsafe!
     let ret = b.get(proto_port_index.try_into().unwrap());
     Box::into_raw(b); // don't drop!
@@ -324,11 +327,17 @@ pub unsafe extern "C" fn connector_gotten(
 /// # Safety
 /// TODO
 #[no_mangle]
-pub unsafe extern "C" fn port_close(connector: *mut Connector, _proto_port_index: c_uint) -> c_int {
-    let b = Box::from_raw(connector); // unsafe!
-                                      // TODO
+pub unsafe extern "C" fn connector_dump_log(connector: *mut Connector) -> c_int {
+    let mut b = Box::from_raw(connector); // unsafe!
+    let result = match b.get_mut_logger() {
+        Some(s) => {
+            println!("{}", s);
+            0
+        }
+        None => 1,
+    };
     Box::into_raw(b); // don't drop!
-    0
+    result
 }
 
 /// # Safety
@@ -354,9 +363,10 @@ pub unsafe extern "C" fn connector_sync(connector: *mut Connector, timeout_milli
     let mut b = Box::from_raw(connector); // unsafe!
     let result = match b.sync(Duration::from_millis(timeout_millis)) {
         Ok(batch_index) => batch_index.try_into().unwrap(),
+        Err(SyncErr::Timeout) => -1, // timeout!
         Err(e) => {
             overwrite_last_error(format!("{:?}", e).as_bytes());
-            -1
+            -2
         }
     };
     Box::into_raw(b); // don't drop!

@@ -70,6 +70,12 @@ int connector_connect(Connector *connector, uint64_t timeout_millis);
 void connector_destroy(Connector *connector);
 
 /**
+ * # Safety
+ * TODO
+ */
+int connector_dump_log(Connector *connector);
+
+/**
  * Resets the error message buffer.
  * Returns:
  * - 0 if an error was cleared
@@ -137,11 +143,5 @@ int connector_sync(Connector *connector, uint64_t timeout_millis);
  * Creates and returns Reowolf Connector structure allocated on the heap.
  */
 Connector *connector_with_controller_id(ControllerId controller_id);
-
-/**
- * # Safety
- * TODO
- */
-int port_close(Connector *connector, unsigned int _proto_port_index);
 
 #endif /* REOWOLF_HEADER_DEFINED */

@@ -12,7 +12,7 @@ void check(const char* phase, int err) {
 
 // allocates a buffer!
 char * buffer_pdl(char * filename) {
-	FILE *f = fopen("forward.pdl", "rb");
+	FILE *f = fopen(filename, "rb");
 	if (f == NULL) {
 		printf("Opening pdl file returned errno %d!\n", errno);
 		exit(1);

@@ -147,7 +147,7 @@ impl Connector {
             _ => return Err(()),
         };
         connected.sync_batches.push(SyncBatch::default());
-        Ok(connected.sync_batches.len() - 1)
+        Ok(connected.sync_batches.len() - 2)
     }
 
     pub fn sync(&mut self, timeout: Duration) -> Result<usize, SyncErr> {
