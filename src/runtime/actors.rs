@@ -323,10 +323,10 @@ impl PolyP {
                             if payload_branch.blocking_on == Some(ekey) {
                                 // run the fork
                                 payload_branch.blocking_on = None;
-                                Some((old_predicate, payload_branch))
+                                Some((payload_predicate.clone(), payload_branch))
                             } else {
                                 // don't bother running. its awaiting something else
-                                incomplete2.insert(old_predicate, payload_branch);
+                                incomplete2.insert(payload_predicate.clone(), payload_branch);
                                 None
                             }
                         }
@@ -379,6 +379,7 @@ impl PolyN {
             let mut report_if_solution =
                 |branch: &BranchN, pred: &Predicate, logger: &mut String| {
                     if branch.to_get.is_empty() {
+                        log!(logger, "Native reporting solution with inbox {:#?}", &branch.gotten);
                         solution_storage.submit_and_digest_subtree_solution(
                             logger,
                             SubtreeId::PolyN,
@@ -396,14 +397,14 @@ impl PolyN {
             );
             match case {
                 Csr::Nonexistant => { /* skip branch */ }
-                Csr::FormerNotLatter | Csr::Equivalent => {
+                Csr::LatterNotFormer | Csr::Equivalent => {
                     // Feed the message to this branch in-place. no need to modify pred.
                     if branch.to_get.remove(&ekey) {
                         branch.gotten.insert(ekey, payload.clone());
                         report_if_solution(&branch, &old_predicate, logger);
                     }
                 }
-                Csr::LatterNotFormer => {
+                Csr::FormerNotLatter => {
                     // create a new branch with the payload_predicate.
                     let mut forked = branch.clone();
                     if forked.to_get.remove(&ekey) {
@@ -422,15 +423,10 @@ impl PolyN {
                     }
                 }
             }
-            // unlike PolyP machines, Native branches do not become inconsistent
+            // unlike PolyP machines, Native branches do NOT become inconsistent
             branches2.insert(old_predicate, branch);
         }
-        log!(
-            logger,
-            "Native now has {} branches with predicates: {:?}",
-            branches2.len(),
-            branches2.keys().collect::<Vec<_>>()
-        );
+        log!(logger, "Native now has branches {:#?}", &branches2);
         std::mem::swap(&mut branches2, &mut self.branches);
     }
 

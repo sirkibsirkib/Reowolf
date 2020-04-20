@@ -7,8 +7,15 @@ impl Controller {
         let ret = match &decision {
             Decision::Success(predicate) => {
                 // overwrite MonoN/P
-                self.inner.mono_n =
-                    self.ephemeral.poly_n.take().unwrap().choose_mono(predicate).unwrap();
+                self.inner.mono_n = {
+                    let poly_n = self.ephemeral.poly_n.take().unwrap();
+                    poly_n.choose_mono(predicate).unwrap_or_else(|| {
+                        panic!(
+                            "Ending round with decision pred {:#?} but poly_n has branches {:#?}. My log is... {}",
+                            &predicate, &poly_n.branches, &self.inner.logger
+                        );
+                    })
+                };
                 self.inner.mono_ps.clear();
                 self.inner.mono_ps.extend(
                     self.ephemeral
@@ -419,6 +426,7 @@ impl Controller {
                     return self.end_round_with_decision(decision);
                 }
                 CommMsgContents::SendPayload { payload_predicate, payload } => {
+                    // check that we expect to be able to receive payloads from this sender
                     assert_eq!(
                         Getter,
                         self.inner.endpoint_exts.get(received.recipient).unwrap().info.polarity
@@ -434,6 +442,17 @@ impl Controller {
                         &payload_predicate,
                         &payload
                     );
+                    let channel_id = self
+                        .inner
+                        .endpoint_exts
+                        .get(received.recipient)
+                        .expect("UEHFU")
+                        .info
+                        .channel_id;
+                    if payload_predicate.query(channel_id) != Some(true) {
+                        // sender didn't preserve the invariant
+                        return Err(SyncErr::PayloadPremiseExcludesTheChannel(channel_id));
+                    }
                     match subtree_id {
                         None => {
                             // this happens when a message is sent to a component that has exited.
@@ -455,17 +474,6 @@ impl Controller {
                         }
                         Some(PolyId::P { index }) => {
                             // Message for protocol actor
-                            let channel_id = self
-                                .inner
-                                .endpoint_exts
-                                .get(received.recipient)
-                                .expect("UEHFU")
-                                .info
-                                .channel_id;
-                            if payload_predicate.query(channel_id) != Some(true) {
-                                // sender didn't preserve the invariant
-                                return Err(SyncErr::PayloadPremiseExcludesTheChannel(channel_id));
-                            }
                             let poly_p = &mut self.ephemeral.poly_ps[*index];
 
                             let m_ctx = PolyPContext {
