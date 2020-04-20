@@ -1,0 +1,13 @@
+primitive forward(in i, out o) {
+	while(true) synchronous {
+		put(o, get(i));
+	}
+}
+
+primitive forward_two(in ia, in ib, out oa, out ob) {
+	while(true) synchronous {
+		put(oa, get(ia));
+		put(ob, get(ib));
+	}
+}
+

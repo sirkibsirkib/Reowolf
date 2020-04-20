@@ -610,6 +610,50 @@ fn connector_exchange() {
 }
 
 #[test]
+fn connector_both() {
+    /* ------->   -----P|A---->   ------->
+      / /--->\ \ / /---P|A-->\ \ / /--->\ \
+    Alice    exchange       exchange     Bob
+    */
+    let timeout = Duration::from_millis(1_500);
+    let addrs = [next_addr(), next_addr()];
+    const N: usize = 1;
+    assert!(run_connector_set(&[
+        //
+        &|x| {
+            // Alice
+            x.configure(PDL, b"exchange").unwrap();
+            x.bind_port(0, Native).unwrap(); // native in a
+            x.bind_port(1, Passive(addrs[0])).unwrap(); // peer out a
+            x.bind_port(2, Native).unwrap(); // native in b
+            x.bind_port(3, Passive(addrs[1])).unwrap(); // peer out b
+            x.connect(timeout).unwrap();
+            for _ in 0..N {
+                assert_eq!(Ok(()), x.put(0, b"one".to_vec()));
+                assert_eq!(Ok(()), x.put(1, b"two".to_vec()));
+                assert_eq!(Ok(0), x.sync(timeout));
+            }
+        },
+        &|x| {
+            // Alice
+            x.configure(PDL, b"exchange").unwrap();
+            x.bind_port(0, Active(addrs[0])).unwrap(); // peer in a
+            x.bind_port(1, Native).unwrap(); // native out b
+            x.bind_port(2, Active(addrs[1])).unwrap(); // peer in b
+            x.bind_port(3, Native).unwrap(); // native out a
+            x.connect(timeout).unwrap();
+            for _ in 0..N {
+                assert_eq!(Ok(()), x.get(0));
+                assert_eq!(Ok(()), x.get(1));
+                assert_eq!(Ok(0), x.sync(timeout));
+                assert_eq!(Ok(b"one" as &[u8]), x.read_gotten(0));
+                assert_eq!(Ok(b"two" as &[u8]), x.read_gotten(1));
+            }
+        },
+    ]));
+}
+
+#[test]
 fn connector_routing_filter() {
     // Make a protocol whose behavior is a function of the contents of
     // a message. Here, the putter determines what is sent, and the proto

@@ -137,10 +137,28 @@ impl PolyP {
                                     continue 'to_run_loop;
                                 }
                             }
-                            Some(false) => assert!(!fired),
+                            Some(false) => {
+                                if fired {
+                                    println!(
+                                        "pred {:#?} in {:#?} out {:#?}",
+                                        &predicate,
+                                        branch.inbox.get(ekey),
+                                        branch.outbox.get(ekey)
+                                    );
+                                    panic!("channel_id {:?} fired (based on outbox/inbox) but the predicate had Some(false)!" ,channel_id)
+                                }
+                            }
                             None => {
                                 predicate.replace_assignment(channel_id, false);
-                                assert!(!fired)
+                                if fired {
+                                    println!(
+                                        "pred {:#?} in {:#?} out {:#?}",
+                                        &predicate,
+                                        branch.inbox.get(ekey),
+                                        branch.outbox.get(ekey)
+                                    );
+                                    panic!("channel_id {:?} fired (based on outbox/inbox) but the predicate had None!" ,channel_id)
+                                }
                             }
                         }
                     }
