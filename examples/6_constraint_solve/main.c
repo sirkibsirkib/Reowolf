@@ -14,20 +14,17 @@ typedef struct PeerInfo {
 
 // return the index of (i,j) in the lexicographic ordering of set {(i,j) : i<j, j<N}
 // for convenience, swaps (i,j) if i>j 
-int combination_index(int i, int j) {
+int combination_index(unsigned int i, unsigned int j) {
 	if (i > j) {
 		// swap!
 		i ^= j;
 		j ^= i;
 		i ^= j;
 	}
-	assert(0 <= i);
-	assert(i < j);
-	assert(j < N);
-		
-	int idx_in_square = i*N + j;
-	int skipped = ((i+1) * (i+2)) / 2;
-	return idx_in_square - skipped;
+	assert(i<j && j<N);
+	unsigned int index_in_square = i*N + j;
+	unsigned int skipped_indexes = ((i+1) * (i+2)) / 2;
+	return index_in_square - skipped_indexes;
 }
 
 // initializes the given 3-element array,
@@ -88,7 +85,7 @@ int main(int arg_c, char * argv[]) {
 	
 	// for every native port, create a singleton batch
 	for (i = 0; i < 3; i++) {
-		if (i > 0) check("next ", connector_next_batch(c));
+		if (i > 0) assert(connector_next_batch(c) >= 0);
 		PeerInfo * pi = &peer_infos[i];
 		check("op ", pi->puts?
 			connector_get(c, i):
