@@ -2,8 +2,9 @@
 #include "../../reowolf.h"
 #include "../utility.c"
 
-int main() { // BOB!
-	
+int main() {
+
+	// bob hard-codes his protocol.
 	char* pdl =
 	"primitive forward(in i, out o) {"
 	"	while(true) synchronous {"
@@ -12,7 +13,7 @@ int main() { // BOB!
 	"}"
 	;
 	
-	// BOB
+	// setup a connector with one incoming network channel.
 	Connector* c = connector_new();
 	printf("configuring...\n");
 	check("config ", connector_configure(c, pdl, "forward"));
@@ -21,6 +22,7 @@ int main() { // BOB!
 	printf("connecting...\n");
 	check("connect", connector_connect(c, 5000));
 	
+	// receive a message and print it to stdout three times
 	int i;
 	for (i = 0; i < 3; i++) {
 		check("get ", connector_get(c, 0));
@@ -32,7 +34,8 @@ int main() { // BOB!
 
 		printf("Received one message `%s`!\n", msg);
 	}
-	
+
+	// cleanup
 	printf("destroying...\n");
 	connector_destroy(c);
 	printf("exiting...\n");

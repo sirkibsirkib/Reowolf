@@ -3,8 +3,9 @@
 #include "../../reowolf.h"
 #include "../utility.c"
 
-int main() { // AMY
+int main() {
 	
+	// amy hard-codes her protocol.
 	char* pdl =
 	"primitive forward(in i, out o) {"
 	"	while(true) synchronous {"
@@ -13,16 +14,16 @@ int main() { // AMY
 	"}"
 	;
 	
+	// fill a buffer with the user's message to send.
 	char msg_buf[128];
 	memset(msg_buf, 0, 128);
-	
 	printf("input a message to send:");
-
 	check("fgets", fgets(msg_buf, 128-1, stdin) == NULL);
 	int msg_len = strlen(msg_buf);
 	msg_buf[msg_len-1] = 0;
 	printf("will send msg `%s`\n", msg_buf);
 	
+	// create a connector with one outgoing network channel.
 	Connector* c = connector_new();
 	printf("configuring...\n");
 	check("config ", connector_configure(c, pdl, "forward"));
@@ -31,6 +32,7 @@ int main() { // AMY
 	printf("connecting...\n");
 	check("connect", connector_connect(c, 5000));
 	
+	// send the user-provided message three times
 	int i;
 	for (i = 0; i < 3; i++) {
 		check("put ", connector_put(c, 0, msg_buf, msg_len));
@@ -38,6 +40,7 @@ int main() { // AMY
 		printf("Sent one message!\n");
 	}
 	
+	// clean up
 	printf("destroying...\n");
 	connector_destroy(c);
 	printf("exiting...\n");

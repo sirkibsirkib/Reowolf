@@ -4,14 +4,14 @@
 #include "../../reowolf.h"
 #include "../utility.c"
 
-int main() { // AMY
+int main() {
+
+	// amy's protocol is loaded at runtime from a file.
 	char * pdl = buffer_pdl("eg_protocols.pdl");
 	
 	char msg_buf[128];
 	memset(msg_buf, 0, 128);
-	
 	printf("input a message to send:");
-
 	check("fgets", fgets(msg_buf, 128-1, stdin) == NULL);
 	int msg_len = strlen(msg_buf);
 	msg_buf[msg_len-1] = 0;

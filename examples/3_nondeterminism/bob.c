@@ -3,23 +3,19 @@
 #include "../../reowolf.h"
 #include "../utility.c"
 
-int main() { // BOB!
+int main() {
 	char * pdl = buffer_pdl("eg_protocols.pdl");
-	Connector* c = connector_new();
 
+	Connector* c = connector_new();
 	printf("configuring...\n");
 	check("config ", connector_configure(c, pdl, "sync"));
-
 	check("bind 0 ", connector_bind_active(c, 0, "127.0.0.1:7000"));
 	check("bind 1 ", connector_bind_native(c, 1));
-
 	printf("connecting...\n");
 	check("connect", connector_connect(c, 5000));
 
-	int msg_len;
+	int msg_len, i;
 	const unsigned char * msg;
-
-	int i;
 	srand(time(NULL));
 	for (i = 0; i < 10; i++) {
 		printf("\nround %d...\n", i);

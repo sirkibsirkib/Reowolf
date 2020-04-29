@@ -2,10 +2,11 @@
 #include "../../reowolf.h"
 #include "../utility.c"
 
-int main() { // BOB!
+int main() {
+
+	// bob's behavior is loaded from a file at runtime
 	char * pdl = buffer_pdl("eg_protocols.pdl");
 	
-	// BOB
 	Connector* c = connector_new();
 	printf("configuring...\n");
 	check("config ", connector_configure(c, pdl, "forward"));

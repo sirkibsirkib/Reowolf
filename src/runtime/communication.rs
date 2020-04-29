@@ -100,8 +100,9 @@ impl Controller {
             if branches.contains_key(&predicate) {
                 // TODO what do I do with redundant predicates?
                 unimplemented!(
-                    "Having multiple batches with the same
-                    predicate requires the support of oracle boolean variables"
+                    "Duplicate predicate {:#?}!\nHaving multiple batches with the same
+                    predicate requires the support of oracle boolean variables",
+                    &predicate,
                 )
             }
             let branch = BranchN { to_get: gets, gotten: Default::default(), sync_batch_index };
