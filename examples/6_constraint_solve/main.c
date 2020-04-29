@@ -81,7 +81,7 @@ int main(int arg_c, char * argv[]) {
 		}
 	}
 	printf("connecting...\n");
-	check("connect", connector_connect(c, 5000));
+	check("connect", connector_connect(c, 3000));
 	
 	// for every native port, create a singleton batch
 	for (i = 0; i < 3; i++) {
@@ -92,9 +92,10 @@ int main(int arg_c, char * argv[]) {
 			connector_put(c, i, NULL, 0));
 	}
 	// solve!
+	printf("solving...\n");
 	int batch_idx = connector_sync(c, 3000);
 	if (batch_idx < 0) printf("Error code on sync! %d\n", batch_idx);
-	else printf("I was paired with peer %d\n", peer_infos[batch_idx].id);
+	else printf("{ me: %d, peer: %d }\n", my_id, peer_infos[batch_idx].id);
 	
 	printf("destroying...\n");
 	connector_destroy(c);
