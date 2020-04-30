@@ -36,6 +36,7 @@ impl Connector {
             bindings: Default::default(),
             polarities,
             main_component: main_component.to_vec(),
+            logger: "Logger created!\n".into(),
         };
         *self = Connector::Configured(configured);
         Ok(())
@@ -88,6 +89,7 @@ impl Connector {
             &configured.main_component,
             configured.protocol_description.clone(),
             &bound_proto_interface[..],
+            &mut configured.logger,
             deadline,
         )?;
         *self = Connector::Connected(Connected {
@@ -99,6 +101,7 @@ impl Connector {
     }
     pub fn get_mut_logger(&mut self) -> Option<&mut String> {
         match self {
+            Connector::Configured(configured) => Some(&mut configured.logger),
             Connector::Connected(connected) => Some(&mut connected.controller.inner.logger),
             _ => None,
         }

@@ -55,6 +55,7 @@ pub struct Configured {
     bindings: HashMap<usize, PortBinding>,
     protocol_description: Arc<ProtocolD>,
     main_component: Vec<u8>,
+    logger: String,
 }
 #[derive(Debug)]
 pub struct Connected {

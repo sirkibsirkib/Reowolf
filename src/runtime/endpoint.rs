@@ -88,8 +88,11 @@ impl From<EndpointErr> for ConnectErr {
 }
 impl Endpoint {
     // asymmetric
-    pub(crate) fn from_fresh_stream(stream: mio::net::TcpStream) -> Self {
-        Self::Network(NetworkEndpoint { stream, inbox: vec![], outbox: vec![] })
+    // pub(crate) fn from_fresh_stream(stream: mio::net::TcpStream) -> Self {
+    //     Self::Network(NetworkEndpoint { stream, inbox: vec![], outbox: vec![] })
+    // }
+    pub(crate) fn from_fresh_stream_and_inbox(stream: mio::net::TcpStream, inbox: Vec<u8>) -> Self {
+        Self::Network(NetworkEndpoint { stream, inbox, outbox: vec![] })
     }
 
     // symmetric
