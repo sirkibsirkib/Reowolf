@@ -20,7 +20,10 @@ primitive sync_two(in ia, in ib, out oa, out ob) {
 	}
 }
 
-composite recovery_bob(in i, out o) {
+composite bob3(in i, out o) {
+	new sync(i, o);
+}
+composite bob5(in i, out o) {
 	new sync(i, o);
 }
 

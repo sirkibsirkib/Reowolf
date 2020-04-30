@@ -48,7 +48,7 @@ const char* addrs[] = {
 	"127.0.0.1:7005",
 };
 int main(int arg_c, char * argv[]) {
-	int my_id, peer_id, i;
+	int my_id, peer_id, i, code;
 	if (arg_c != 2) {
 		printf("Expected one arg: which peer I am in 0..4");
 		return 1;
@@ -93,13 +93,12 @@ int main(int arg_c, char * argv[]) {
 	}
 	// solve!
 	printf("solving...\n");
-	int batch_idx = connector_sync(c, 3000);
-	if (batch_idx < 0) printf("Error code on sync! %d\n", batch_idx);
-	else printf("{ me: %d, peer: %d }\n", my_id, peer_infos[batch_idx].id);
+	code = connector_sync(c, 3000);
+	if (code < 0) printf("Error code on sync! %d\n", code);
+	else printf("{ my_id: %d, peer_id: %d }\n", my_id, peer_infos[code].id);
 	
-	printf("destroying...\n");
+	printf("cleanup...\n");
 	connector_destroy(c);
-	printf("exiting...\n");
 	free(pdl);
 	return 0;
 }

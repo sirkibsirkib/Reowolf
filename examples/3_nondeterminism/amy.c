@@ -4,6 +4,7 @@
 #include "../../reowolf.h"
 #include "../utility.c"
 
+// amy indefinitely offers 0/1 messages with contents: the number of total sent messages
 int main() {
 	char * pdl = buffer_pdl("eg_protocols.pdl");
 	
@@ -20,23 +21,25 @@ int main() {
 
 	int send_next = 0;
 	char msg_buf[32];
-	int code;
-	int i;
+	int code, i;
 	for (i = 0; 1; i++) {
 		itoa(send_next, msg_buf, 10);
-		printf("\nround %d. Will send msg `%s` next", i, msg_buf);
+		printf("\nround %d. Will send msg `%s` next\n", i, msg_buf);
 		
 		// option (a): no messages sent
 		check("next_batch ", connector_next_batch(c));
 		
 		// option (b): one message sent
 		check("put ", connector_put(c, 0, msg_buf, strlen(msg_buf) + 1));
+		
 		code = connector_sync(c, 3000);
+		check("sync ", code);
 		
 		// reflect on the outcome of the exchange
-		if (code == 0) printf("Sent no message!");
-		else if (code == 1) {
-			printf("Sent message `%s`!", msg_buf);
+		if (code == 0) {
+			printf("Sent no message!\n");
+		} else if (code == 1) {
+			printf("Sent message `%s`!\n", msg_buf);
 			send_next++;
 		} else {
 			printf(

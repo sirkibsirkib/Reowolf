@@ -244,9 +244,9 @@ impl Controller {
                         ms.poll.reregister(stream, token, ready_r, edge).expect("52");
                         let mut res = Ok(());
                         take_mut::take(entry, |e| {
+                            let mut inbox = vec![];
+                            std::mem::swap(&mut inbox, &mut next_inbox);
                             assert_let![PassiveConnecting { info, stream, .. } = e => {
-                                let mut inbox = vec![];
-                                std::mem::swap(&mut inbox, &mut next_inbox);
                                 let mut endpoint = Endpoint::from_fresh_stream_and_inbox(stream, inbox);
                                 let msg = Msg::SetupMsg(SetupMsg::ChannelSetup { info });
                                 res = endpoint.send(msg);
@@ -265,9 +265,9 @@ impl Controller {
                             log!(logger, "Connectivity test passed");
                             ms.poll.reregister(stream, token, ready_r, edge).expect("52");
                             take_mut::take(entry, |e| {
-                                assert_let![ActiveConnecting { stream, polarity, addr } = e => {
                                 let mut inbox = vec![];
                                 std::mem::swap(&mut inbox, &mut next_inbox);
+                                assert_let![ActiveConnecting { stream, polarity, addr } = e => {
                                     let endpoint = Endpoint::from_fresh_stream_and_inbox(stream, inbox);
                                     ActiveRecving { endpoint, polarity, addr }
                                 }]

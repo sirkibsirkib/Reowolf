@@ -2,10 +2,10 @@
 #include <stdlib.h>
 #include <errno.h>
 
-void check(const char* phase, int err) {
-	if (err) {
+void check(const char* phase, int code) {
+	if (code < 0) {
 		printf("ERR %d in phase `%s`. Err was `%s`\nEXITING!\n",
-			err, phase, connector_error_peek());
+			code, phase, connector_error_peek());
 		exit(1);
 	}
 }

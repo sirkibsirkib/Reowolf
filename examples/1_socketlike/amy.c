@@ -5,23 +5,13 @@
 
 int main() {
 	
-	// amy hard-codes her protocol.
+	// Protocol is hard-coded.
 	char* pdl =
 	"primitive forward(in i, out o) {"
-	"	while(true) synchronous {"
-	"		put(o, get(i));"
-	"	}"
-	"}"
-	;
-	
-	// fill a buffer with the user's message to send.
-	char msg_buf[128];
-	memset(msg_buf, 0, 128);
-	printf("input a message to send:");
-	check("fgets", fgets(msg_buf, 128-1, stdin) == NULL);
-	int msg_len = strlen(msg_buf);
-	msg_buf[msg_len-1] = 0;
-	printf("will send msg `%s`\n", msg_buf);
+	"  while(true) synchronous {     "
+	"    put(o, get(i));             "
+	"  }                             "
+	"}                               ";
 	
 	// create a connector with one outgoing network channel.
 	Connector* c = connector_new();
@@ -32,17 +22,15 @@ int main() {
 	printf("connecting...\n");
 	check("connect", connector_connect(c, 5000));
 	
-	// send the user-provided message three times
+	// send "hello" message three times
 	int i;
 	for (i = 0; i < 3; i++) {
-		check("put ", connector_put(c, 0, msg_buf, msg_len));
+		check("put ", connector_put(c, 0, "hello", 5));
 		check("sync", connector_sync(c, 1000));
 		printf("Sent one message!\n");
 	}
 	
-	// clean up
-	printf("destroying...\n");
+	printf("cleaning up\n");
 	connector_destroy(c);
-	printf("exiting...\n");
 	return 0;
 }

@@ -18,8 +18,7 @@ int main() { // AMY
 	printf("connecting...\n");
 	check("connect", connector_connect(c, 5000));
 
-	int i;
-	int code;
+	int i, code;
 	while (1) {
 		printf("\nround %d\n", i);
 		
@@ -33,6 +32,7 @@ int main() { // AMY
 		
 		if (code == 0) printf("Sent neither message!");
 		else if (code == 1) printf("Sent both messages!");
+		else if (code == -1) printf("Sync failed!\n");
 		else {
 			printf(
 				"Connector error! %d (%s)\nBreaking loop!\n",
@@ -42,9 +42,8 @@ int main() { // AMY
 		}
 	}
 	
-	printf("destroying...\n");
+	printf("cleaning up...\n");
 	connector_destroy(c);
-	printf("exiting...\n");
 	free(pdl);
 	return 0;
 }

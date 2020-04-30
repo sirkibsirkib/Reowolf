@@ -2,13 +2,12 @@
 #include "../../reowolf.h"
 #include "../utility.c"
 
-int main() { // BOB!
-	char * pdl = buffer_pdl("eg_protocols.pdl");
+int main() {
+
 	Connector* c = connector_new();
-
 	printf("configuring...\n");
+	char * pdl = buffer_pdl("eg_protocols.pdl");
 	check("config ", connector_configure(c, pdl, "sync_two"));
-
 	check("bind 0 ", connector_bind_active(c, 0, "127.0.0.1:7000"));
 	check("bind 1 ", connector_bind_active(c, 1, "127.0.0.1:7001"));
 	check("bind 2 ", connector_bind_native(c, 2));
@@ -17,57 +16,35 @@ int main() { // BOB!
 	printf("connecting...\n");
 	check("connect", connector_connect(c, 5000));
 
-	int msg_len;
 	const unsigned char * msg;
+	const char * nth[2] = {"first", "second"};
+	int i, code, msg_len;
+	char yn[2];
+	
+	while(true) {
+		printf("\nround %d...\n", i);
+		printf("Which of the two messages should we receive? (y/n)(y/n) (eg: yy): ");
+		scanf(" %c%c", &yn[0], &yn[1]);
+		for (i = 0; i < 2; i++) {
+			if (yn[i] != 'y' && yn[i] != 'n') {
+				printf("Expected (y/n) input!");
+				continue;
+			}
+		}
+		printf("Receiving messages [%c, %c]\n", yn[0], yn[1]);
+		if (yn[0] == 'y') check("get first  ", connector_get(c, 0));
+		if (yn[1] == 'y') check("get second ", connector_get(c, 1));
+		check("sync ", connector_sync(c, 3000));
+		for (i = 0; i < 2; i++) {
+			if (yn[i] == 'y') {
+				check("read ", connector_gotten(c, i, &msg, &msg_len));
+				printf("Got %s msg `%.*s`\n", nth[i], msg_len, msg);
+			}
+		}
+	}
 
-	int i;
-	
-	// rounds 0..=2: get both messages
-	for (i = 0; i <= 2; i++) {
-		printf("\nround %d\n", i);
-		
-		check("get ", connector_get(c, 0));
-		check("get ", connector_get(c, 1));
-		check("sync", connector_sync(c, 1000));
-		
-		check("read one", connector_gotten(c, 0, &msg, &msg_len));
-		printf("Got message one: `%.*s`\n", msg_len, msg);
-		
-		check("read two", connector_gotten(c, 1, &msg, &msg_len));
-		printf("Got message two: `%.*s`\n", msg_len, msg);
-	}
-	// rounds 3..=5: get neither message
-	for (i = 3; i <= 5; i++) {
-		printf("\nround %d\n", i);
-		
-		//check("get ", connector_get(c, 0));
-		//check("get ", connector_get(c, 1));
-		check("sync", connector_sync(c, 3000));
-		
-		//check("read one", connector_gotten(c, 0, &msg, &msg_len));
-		//printf("Got message one: `%.*s`\n", msg_len, msg);
-		
-		//check("read two", connector_gotten(c, 1, &msg, &msg_len));
-		//printf("Got message two: `%.*s`\n", msg_len, msg);
-	}
-	// round 6: attempt to get just one message
-	for (i = 6; i <= 6; i++) {
-		printf("\nround %d\n", i);
-		
-		check("get ", connector_get(c, 0));
-		//check("get ", connector_get(c, 1));
-		check("sync", connector_sync(c, 3000));
-		
-		//check("read one", connector_gotten(c, 0, &msg, &msg_len));
-		//printf("Got message one: `%.*s`\n", msg_len, msg);
-		
-		check("read two", connector_gotten(c, 1, &msg, &msg_len));
-		printf("Got message two: `%.*s`\n", msg_len, msg);
-	}
-	
-	printf("destroying...\n");
+	printf("cleaning up\n");
 	connector_destroy(c);
-	printf("exiting...\n");
 	free(pdl);
 	return 0;
 }
