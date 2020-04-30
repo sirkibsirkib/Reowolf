@@ -5,7 +5,6 @@ use core::fmt::Debug;
 use std::net::SocketAddr;
 
 mod connector;
-mod net;
 mod setup;
 
 // using a static AtomicU16, shared between all tests in the binary,
