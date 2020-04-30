@@ -4,3 +4,4 @@ target
 Cargo.lock
 main
 examples/*/*.exe
+examples/reowolf*
