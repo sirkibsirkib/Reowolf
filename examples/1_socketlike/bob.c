@@ -20,7 +20,8 @@ int main() {
 	check("bind 0 ", connector_bind_active(c, 0, "127.0.0.1:7000"));
 	check("bind 1 ", connector_bind_native(c, 1));
 	printf("connecting...\n");
-	check("connect", connector_connect(c, 5000));
+	printf("connect err %d%n", connector_connect(c, 20000));
+	printf("%s%n", connector_dump_log(c));
 	
 	// receive a message and print it to stdout three times
 	int i;
