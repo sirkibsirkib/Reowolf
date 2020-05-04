@@ -34,7 +34,7 @@ int main() {
 		printf("Receiving messages [%c, %c]\n", yn[0], yn[1]);
 		if (yn[0] == 'y') check("get first  ", connector_get(c, 0));
 		if (yn[1] == 'y') check("get second ", connector_get(c, 1));
-		check("sync ", connector_sync(c, 3000));
+		check("sync ", connector_sync(c, 1000));
 		for (i = 0; i < 2; i++) {
 			if (yn[i] == 'y') {
 				check("read ", connector_gotten(c, i, &msg, &msg_len));

@@ -1,7 +1,11 @@
+
 primitive forward(in i, out o) {
 	while(true) synchronous {
 		put(o, get(i));
 	}
+}
+composite dynamic(in i, out o) {
+	new forward(i, o);
 }
 primitive sync(in i, out o) {
 	while(true) synchronous {
@@ -18,13 +22,6 @@ primitive sync_two(in ia, in ib, out oa, out ob) {
 			put(ob, get(ib));
 		}
 	}
-}
-
-composite bob3(in i, out o) {
-	new sync(i, o);
-}
-composite bob5(in i, out o) {
-	new sync(i, o);
 }
 
 primitive xor_three(in ai, out ao, in bi, out bo, in ci, out co) {

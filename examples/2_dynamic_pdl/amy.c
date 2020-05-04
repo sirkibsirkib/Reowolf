@@ -11,7 +11,7 @@ int main() {
 	// create a connector with one outgoing network channel.
 	Connector* c = connector_new();
 	printf("configuring...\n");
-	check("config ", connector_configure(c, pdl, "forward"));
+	check("config ", connector_configure(c, pdl, "dynamic"));
 	check("bind 0 ", connector_bind_native(c, 0));
 	check("bind 1 ", connector_bind_passive(c, 1, "127.0.0.1:7000"));
 	printf("connecting...\n");
