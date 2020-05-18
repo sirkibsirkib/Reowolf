@@ -258,9 +258,9 @@ pub unsafe extern "C" fn connector_put(
     msg_len: c_uint,
 ) -> c_int {
     let buf = std::slice::from_raw_parts_mut(buf_ptr, msg_len.try_into().unwrap());
-    let payload = buf.to_vec(); // unsafe
+    let vec: Vec<u8> = buf.to_vec(); // unsafe
     let mut b = Box::from_raw(connector); // unsafe!
-    let ret = b.put(proto_port_index.try_into().unwrap(), payload);
+    let ret = b.put(proto_port_index.try_into().unwrap(), vec.into());
     Box::into_raw(b); // don't drop!
     match ret {
         Ok(()) => 0,

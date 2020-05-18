@@ -24,9 +24,12 @@ pub use Polarity::*;
 
 ///////////////////// DEFS /////////////////////
 
-pub type Payload = Vec<u8>;
+// pub type Payload = Vec<u8>;
 pub type ControllerId = u32;
 pub type ChannelIndex = u32;
+
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct Payload(Vec<u8>);
 
 /// This is a unique identifier for a channel (i.e., port).
 #[derive(Debug, Eq, PartialEq, Clone, Hash, Copy, Ord, PartialOrd)]
@@ -111,6 +114,34 @@ pub trait PolyContext {
 }
 
 ///////////////////// IMPL /////////////////////
+impl Payload {
+    pub fn new(len: usize) -> Payload {
+        let mut v = Vec::with_capacity(len);
+        unsafe {
+            v.set_len(len);
+        }
+        Payload(v)
+    }
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    pub fn as_slice(&self) -> &[u8] {
+        &self.0
+    }
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
+        &mut self.0
+    }
+}
+impl std::iter::FromIterator<u8> for Payload {
+    fn from_iter<I: IntoIterator<Item = u8>>(it: I) -> Self {
+        Self(it.into_iter().collect())
+    }
+}
+impl From<Vec<u8>> for Payload {
+    fn from(s: Vec<u8>) -> Self {
+        Self(s.into())
+    }
+}
 impl Debug for Port {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "Port({})", self.0)

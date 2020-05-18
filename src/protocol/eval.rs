@@ -48,7 +48,7 @@ pub enum Value {
     LongArray(LongArrayValue),
 }
 impl Value {
-    pub fn receive_message(buffer: &Vec<u8>) -> Value {
+    pub fn receive_message(buffer: &Payload) -> Value {
         Value::Message(MessageValue(Some(buffer.clone())))
     }
     fn create_message(length: Value) -> Value {
@@ -59,7 +59,7 @@ impl Value {
                     // Only messages within the expected length are allowed
                     Value::Message(MessageValue(None))
                 } else {
-                    Value::Message(MessageValue(Some(vec![0; length.try_into().unwrap()])))
+                    Value::Message(MessageValue(Some(Payload::new(0))))
                 }
             }
             _ => unimplemented!(),
@@ -108,12 +108,12 @@ impl Value {
                 // It is inconsistent to update the null message
                 None
             }
-            (Value::Message(MessageValue(Some(buffer))), Value::Byte(ByteValue(b))) => {
+            (Value::Message(MessageValue(Some(payload))), Value::Byte(ByteValue(b))) => {
                 if *b < 0 {
                     // It is inconsistent to update with a negative value
                     return None;
                 }
-                if let Some(slot) = buffer.get_mut(the_index) {
+                if let Some(slot) = payload.as_mut_slice().get_mut(the_index) {
                     *slot = (*b).try_into().unwrap();
                     Some(value.clone())
                 } else {
@@ -121,12 +121,12 @@ impl Value {
                     None
                 }
             }
-            (Value::Message(MessageValue(Some(buffer))), Value::Short(ShortValue(b))) => {
+            (Value::Message(MessageValue(Some(payload))), Value::Short(ShortValue(b))) => {
                 if *b < 0 || *b > BYTE_MAX as i16 {
                     // It is inconsistent to update with a negative value or a too large value
                     return None;
                 }
-                if let Some(slot) = buffer.get_mut(the_index) {
+                if let Some(slot) = payload.as_mut_slice().get_mut(the_index) {
                     *slot = (*b).try_into().unwrap();
                     Some(value.clone())
                 } else {
@@ -165,8 +165,8 @@ impl Value {
                 // It is inconsistent to read from the null message
                 None
             }
-            Value::Message(MessageValue(Some(buffer))) => {
-                if let Some(slot) = buffer.get(the_index) {
+            Value::Message(MessageValue(Some(payload))) => {
+                if let Some(slot) = payload.as_slice().get(the_index) {
                     Some(Value::Short(ShortValue((*slot).try_into().unwrap())))
                 } else {
                     // It is inconsistent to update out of bounds
@@ -936,27 +936,19 @@ impl ValueImpl for OutputValue {
 }
 
 #[derive(Debug, Clone)]
-pub struct MessageValue(pub Option<Vec<u8>>);
+pub struct MessageValue(pub Option<Payload>);
 
 impl Display for MessageValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match &self.0 {
             None => write!(f, "null"),
-            Some(vec) => {
-                write!(f, "#msg({};", vec.len())?;
-                let mut i = 0;
-                for v in vec.iter() {
-                    if i > 0 {
-                        write!(f, ",")?;
-                    }
-                    write!(f, "{}", v)?;
-                    i += 1;
-                    if i >= 10 {
-                        write!(f, ",...")?;
-                        break;
-                    }
+            Some(payload) => {
+                // format print up to 10 bytes
+                let mut slice = payload.as_slice();
+                if slice.len() > 10 {
+                    slice = &slice[..10];
                 }
-                write!(f, ")")
+                f.debug_list().entries(slice.iter().copied()).finish()
             }
         }
     }

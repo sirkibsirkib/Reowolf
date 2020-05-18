@@ -182,6 +182,6 @@ impl Connector {
         }
         let result = connected.controller.inner.mono_n.result.as_ref().ok_or(NoPreviousRound)?;
         let payload = result.1.get(&key).ok_or(DidNotGet)?;
-        Ok(payload)
+        Ok(payload.as_slice())
     }
 }

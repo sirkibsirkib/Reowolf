@@ -228,8 +228,12 @@ impl EvalContext<'_> {
                 let mut moved_keys = HashSet::new();
                 for arg in args.iter() {
                     match arg {
-                        Value::Output(OutputValue(key)) => { moved_keys.insert(*key); }
-                        Value::Input(InputValue(key)) => { moved_keys.insert(*key); }
+                        Value::Output(OutputValue(key)) => {
+                            moved_keys.insert(*key);
+                        }
+                        Value::Input(InputValue(key)) => {
+                            moved_keys.insert(*key);
+                        }
                         _ => {}
                     }
                 }
@@ -247,7 +251,7 @@ impl EvalContext<'_> {
                 let to = Value::Input(InputValue(to));
                 return [from, to];
             }
-            EvalContext::Poly(_) => unreachable!()
+            EvalContext::Poly(_) => unreachable!(),
         }
     }
     fn fires(&mut self, port: Value) -> Option<Value> {

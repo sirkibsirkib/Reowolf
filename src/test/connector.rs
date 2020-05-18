@@ -178,7 +178,7 @@ fn connector_self_forward_ok() {
             x.bind_port(1, Native).unwrap();
             x.connect(timeout).unwrap();
             for _ in 0..N {
-                x.put(0, MSG.to_vec()).unwrap();
+                x.put(0, MSG.to_vec().into()).unwrap();
                 x.get(1).unwrap();
                 assert_eq!(Ok(0), x.sync(timeout));
                 assert_eq!(Ok(MSG), x.read_gotten(1));
@@ -257,7 +257,7 @@ fn connector_self_forward_timeout() {
             x.bind_port(0, Native).unwrap();
             x.bind_port(1, Native).unwrap();
             x.connect(timeout).unwrap();
-            x.put(0, MSG.to_vec()).unwrap();
+            x.put(0, MSG.to_vec().into()).unwrap();
             // native and forward components cannot find a solution
             assert_eq!(Err(SyncErr::Timeout), x.sync(timeout));
         },
@@ -282,7 +282,7 @@ fn connector_forward_det() {
             x.bind_port(1, Passive(addrs[0])).unwrap();
             x.connect(timeout).unwrap();
             for _ in 0..N {
-                x.put(0, MSG.to_vec()).unwrap();
+                x.put(0, MSG.to_vec().into()).unwrap();
                 assert_eq!(Ok(0), x.sync(timeout));
             }
         },
@@ -319,7 +319,7 @@ fn connector_nondet_proto_det_natives() {
             x.bind_port(1, Active(addrs[0])).unwrap();
             x.connect(timeout).unwrap();
             for _i in 0..N {
-                x.put(0, MSG.to_vec()).unwrap();
+                x.put(0, MSG.to_vec().into()).unwrap();
                 assert_eq!(0, x.sync(timeout).unwrap());
             }
         },
@@ -357,7 +357,7 @@ fn connector_putter_determines() {
             x.bind_port(1, Active(addrs[0])).unwrap();
             x.connect(timeout).unwrap();
             for _i in 0..N {
-                x.put(0, MSG.to_vec()).unwrap();
+                x.put(0, MSG.to_vec().into()).unwrap();
                 assert_eq!(0, x.sync(timeout).unwrap());
             }
         },
@@ -398,7 +398,7 @@ fn connector_getter_determines() {
             x.connect(timeout).unwrap();
             for _i in 0..N {
                 // batches [{0=>?}, {0=>*}]
-                x.put(0, MSG.to_vec()).unwrap();
+                x.put(0, MSG.to_vec().into()).unwrap();
                 x.next_batch().unwrap();
                 assert_eq!(Ok(0), x.sync(timeout));
             }
@@ -443,7 +443,7 @@ fn connector_alternator_2() {
 
             for _ in 0..N {
                 for _ in 0..2 {
-                    x.put(0, MSG.to_vec()).unwrap();
+                    x.put(0, MSG.to_vec().into()).unwrap();
                     assert_eq!(0, x.sync(timeout).unwrap());
                 }
             }
@@ -505,7 +505,7 @@ fn connector_composite_chain_a() {
             x.bind_port(1, Active(addrs[0])).unwrap();
             x.connect(timeout).unwrap();
             for _ in 0..N {
-                x.put(0, MSG.to_vec()).unwrap();
+                x.put(0, MSG.to_vec().into()).unwrap();
                 assert_eq!(0, x.sync(timeout).unwrap());
             }
         },
@@ -544,7 +544,7 @@ fn connector_composite_chain_b() {
             x.bind_port(1, Active(addrs[0])).unwrap();
             x.connect(timeout).unwrap();
             for _ in 0..N {
-                x.put(0, MSG.to_vec()).unwrap();
+                x.put(0, MSG.to_vec().into()).unwrap();
                 assert_eq!(0, x.sync(timeout).unwrap());
             }
         },
@@ -585,7 +585,7 @@ fn connector_exchange() {
             x.bind_port(3, Passive(addrs[1])).unwrap(); // peer in
             x.connect(timeout).unwrap();
             for _ in 0..N {
-                assert_eq!(Ok(()), x.put(0, b"A->B".to_vec()));
+                assert_eq!(Ok(()), x.put(0, b"A->B".to_vec().into()));
                 assert_eq!(Ok(()), x.get(1));
                 assert_eq!(Ok(0), x.sync(timeout));
                 assert_eq!(Ok(b"B->A" as &[u8]), x.read_gotten(1));
@@ -600,7 +600,7 @@ fn connector_exchange() {
             x.bind_port(3, Active(addrs[0])).unwrap(); // peer in
             x.connect(timeout).unwrap();
             for _ in 0..N {
-                assert_eq!(Ok(()), x.put(0, b"B->A".to_vec()));
+                assert_eq!(Ok(()), x.put(0, b"B->A".to_vec().into()));
                 assert_eq!(Ok(()), x.get(1));
                 assert_eq!(Ok(0), x.sync(timeout));
                 assert_eq!(Ok(b"A->B" as &[u8]), x.read_gotten(1));
@@ -629,8 +629,8 @@ fn connector_both() {
             x.bind_port(3, Passive(addrs[1])).unwrap(); // peer out b
             x.connect(timeout).unwrap();
             for _ in 0..N {
-                assert_eq!(Ok(()), x.put(0, b"one".to_vec()));
-                assert_eq!(Ok(()), x.put(1, b"two".to_vec()));
+                assert_eq!(Ok(()), x.put(0, b"one".to_vec().into()));
+                assert_eq!(Ok(()), x.put(1, b"two".to_vec().into()));
                 assert_eq!(Ok(0), x.sync(timeout));
             }
         },
@@ -734,7 +734,7 @@ fn connector_fifo_1_e() {
 
             for _ in 0..N {
                 // put
-                assert_eq!(Ok(()), x.put(0, b"message~".to_vec()));
+                assert_eq!(Ok(()), x.put(0, b"message~".to_vec().into()));
                 assert_eq!(Ok(0), x.sync(timeout));
 
                 // get
@@ -768,7 +768,7 @@ fn connector_causal_loop() {
             x.bind_port(3, Native).unwrap(); // native out
             x.connect(timeout).unwrap();
             for _ in 0..N {
-                assert_eq!(Ok(()), x.put(0, b"A->B".to_vec()));
+                assert_eq!(Ok(()), x.put(0, b"A->B".to_vec().into()));
                 assert_eq!(Ok(()), x.get(1));
                 assert_eq!(Ok(0), x.sync(timeout));
                 assert_eq!(Ok(b"B->A" as &[u8]), x.read_gotten(1));
@@ -783,7 +783,7 @@ fn connector_causal_loop() {
             x.bind_port(3, Native).unwrap(); // native out
             x.connect(timeout).unwrap();
             for _ in 0..N {
-                assert_eq!(Ok(()), x.put(0, b"B->A".to_vec()));
+                assert_eq!(Ok(()), x.put(0, b"B->A".to_vec().into()));
                 assert_eq!(Ok(()), x.get(1));
                 assert_eq!(Ok(0), x.sync(timeout));
                 assert_eq!(Ok(b"A->B" as &[u8]), x.read_gotten(1));
@@ -812,7 +812,7 @@ fn connector_causal_loop2() {
             x.bind_port(1, Native).unwrap();
             x.connect(timeout).unwrap();
             for _ in 0..N {
-                assert_eq!(Ok(()), x.put(0, b"foo".to_vec()));
+                assert_eq!(Ok(()), x.put(0, b"foo".to_vec().into()));
                 assert_eq!(Ok(()), x.get(1));
                 assert_eq!(Ok(0), x.sync(timeout));
             }
@@ -850,7 +850,7 @@ fn connector_recover() {
 
             for i in 0..N {
                 if putter_does(i) {
-                    assert_eq!(Ok(()), x.put(0, b"msg".to_vec()));
+                    assert_eq!(Ok(()), x.put(0, b"msg".to_vec().into()));
                 }
                 assert_eq!(expect_res(i), x.sync(comm_timeout));
             }

@@ -119,7 +119,7 @@ impl<R: Read> De<u64> for R {
 impl<W: Write> Ser<Payload> for W {
     fn ser(&mut self, t: &Payload) -> Result<(), std::io::Error> {
         self.ser(&VarLenInt(t.len() as u64))?;
-        for byte in t {
+        for byte in t.as_slice() {
             self.ser(byte)?;
         }
         Ok(())
@@ -132,7 +132,7 @@ impl<R: Read> De<Payload> for R {
         for _ in 0..len {
             x.push(self.de()?);
         }
-        Ok(x)
+        Ok(x.into())
     }
 }
 
