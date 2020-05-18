@@ -29,7 +29,7 @@ pub type ControllerId = u32;
 pub type ChannelIndex = u32;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct Payload(Vec<u8>);
+pub struct Payload(Arc<Vec<u8>>);
 
 /// This is a unique identifier for a channel (i.e., port).
 #[derive(Debug, Eq, PartialEq, Clone, Hash, Copy, Ord, PartialOrd)]
@@ -120,7 +120,7 @@ impl Payload {
         unsafe {
             v.set_len(len);
         }
-        Payload(v)
+        Payload(Arc::new(v))
     }
     pub fn len(&self) -> usize {
         self.0.len()
@@ -129,12 +129,17 @@ impl Payload {
         &self.0
     }
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        &mut self.0
+        Arc::make_mut(&mut self.0) as _
+    }
+    pub fn concat_with(&mut self, other: &Self) {
+        let bytes = other.as_slice().iter().copied();
+        let me = Arc::make_mut(&mut self.0);
+        me.extend(bytes);
     }
 }
 impl std::iter::FromIterator<u8> for Payload {
     fn from_iter<I: IntoIterator<Item = u8>>(it: I) -> Self {
-        Self(it.into_iter().collect())
+        Self(Arc::new(it.into_iter().collect()))
     }
 }
 impl From<Vec<u8>> for Payload {
