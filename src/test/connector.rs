@@ -9,30 +9,6 @@ static PDL: &[u8] = b"
 primitive forward_once(in i, out o) {
     synchronous() put(o, get(i));
 }
-primitive blocked(in i, out o) {
-    while(true) synchronous {}
-}
-primitive forward(in i, out o) {
-    while(true) synchronous {
-        put(o, get(i));
-    }
-}
-primitive sync(in i, out o) {
-    while(true) synchronous {
-        if (fires(i)) put(o, get(i));
-    }
-}
-primitive alternator_2(in i, out a, out b) {
-    while(true) {
-        synchronous { put(a, get(i)); }
-        synchronous { put(b, get(i)); } 
-    }
-}
-composite sync_2(in i, out o) {
-    channel x -> y;
-    new sync(i, x);
-    new sync(y, o);
-}
 primitive exchange(in ai, out ao, in bi, out bo) {
     // Note the implicit causal relationship
     while(true) synchronous {
@@ -87,18 +63,11 @@ primitive samelen(in a, in b, out c) {
         put(c, m);
     }
 }
-primitive repl2(in a, out b, out c) {
-    synchronous {
-        msg m = get(a);
-        put(b, m);
-        put(c, m);
-    }
-}
 composite samelen_repl(in a, out b) {
     channel c -> d;   
     channel e -> f;
     new samelen(a, f, c);
-    new repl2(d, b, e);
+    new replicator_2(d, b, e);
 }
 ";
 
@@ -113,14 +82,14 @@ fn connector_connects_ok() {
     assert!(run_connector_set(&[
         &|x| {
             // Alice
-            x.configure(PDL, b"blocked").unwrap();
+            x.configure(PDL, b"forward").unwrap();
             x.bind_port(0, Native).unwrap();
             x.bind_port(1, Passive(addrs[0])).unwrap();
             x.connect(timeout).unwrap();
         },
         &|x| {
             // Bob
-            x.configure(PDL, b"blocked").unwrap();
+            x.configure(PDL, b"forward").unwrap();
             x.bind_port(0, Active(addrs[0])).unwrap();
             x.bind_port(1, Native).unwrap();
             x.connect(timeout).unwrap();
@@ -139,7 +108,7 @@ fn connector_connected_but_silent_natives() {
     assert!(run_connector_set(&[
         &|x| {
             // Alice
-            x.configure(PDL, b"blocked").unwrap();
+            x.configure(PDL, b"sync").unwrap();
             x.bind_port(0, Native).unwrap();
             x.bind_port(1, Passive(addrs[0])).unwrap();
             x.connect(timeout).unwrap();
@@ -147,7 +116,7 @@ fn connector_connected_but_silent_natives() {
         },
         &|x| {
             // Bob
-            x.configure(PDL, b"blocked").unwrap();
+            x.configure(PDL, b"sync").unwrap();
             x.bind_port(0, Active(addrs[0])).unwrap();
             x.bind_port(1, Native).unwrap();
             x.connect(timeout).unwrap();
@@ -264,6 +233,7 @@ fn connector_self_forward_timeout() {
     ]));
 }
 
+// TODO this test failed once? maybe a version error. Check on it.
 #[test]
 fn connector_forward_det() {
     // Test if a deterministic protocol and natives can pass one message
@@ -500,7 +470,7 @@ fn connector_composite_chain_a() {
         //
         &|x| {
             // Alice
-            x.configure(PDL, b"sync_2").unwrap();
+            x.configure(PDL, b"sync").unwrap();
             x.bind_port(0, Native).unwrap();
             x.bind_port(1, Active(addrs[0])).unwrap();
             x.connect(timeout).unwrap();
@@ -539,7 +509,7 @@ fn connector_composite_chain_b() {
         //
         &|x| {
             // Alice
-            x.configure(PDL, b"sync_2").unwrap();
+            x.configure(PDL, b"sync").unwrap();
             x.bind_port(0, Native).unwrap();
             x.bind_port(1, Active(addrs[0])).unwrap();
             x.connect(timeout).unwrap();
@@ -550,7 +520,7 @@ fn connector_composite_chain_b() {
         },
         &|x| {
             // Bob
-            x.configure(PDL, b"sync_2").unwrap();
+            x.configure(PDL, b"sync").unwrap();
             x.bind_port(0, Passive(addrs[0])).unwrap();
             x.bind_port(1, Native).unwrap();
             x.connect(timeout).unwrap();

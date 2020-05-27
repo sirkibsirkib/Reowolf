@@ -14,10 +14,37 @@ pub struct InputSource {
     offset: usize,
 }
 
+static STD_LIB_PDL: &'static [u8] = b"
+primitive forward(in i, out o) {
+    while(true) synchronous() put(o, get(i));
+}
+primitive sync(in i, out o) {
+    while(true) synchronous() if(fires(i)) put(o, get(i));
+}
+primitive alternator_2(in i, out a, out b) {
+    while(true) {
+        synchronous() put(a, get(i));
+        synchronous() put(b, get(i));
+    }
+}
+primitive replicator_2(in i, out l, out r) {
+    while(true) synchronous() if(fires(i)) {
+        msg m = get(i);
+        put(l, m);
+        put(r, m);
+    }
+}
+primitive merger_2(in l, in r, out o) {
+    while(true) synchronous {
+        if(fires(l)) put(o, get(l));
+        else         put(o, get(r));
+    }
+}";
+
 impl InputSource {
     // Constructors
     pub fn new<A: io::Read, S: ToString>(filename: S, reader: &mut A) -> io::Result<InputSource> {
-        let mut vec = Vec::new();
+        let mut vec = STD_LIB_PDL.to_vec();
         reader.read_to_end(&mut vec)?;
         Ok(InputSource {
             filename: filename.to_string(),
