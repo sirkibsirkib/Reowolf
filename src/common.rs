@@ -27,6 +27,12 @@ pub use Polarity::*;
 pub type ControllerId = u32;
 pub type ChannelIndex = u32;
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, Hash, PartialOrd)]
+pub struct PortId {
+    pub(crate) controller_id: ControllerId,
+    pub(crate) port_index: u32,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Payload(Arc<Vec<u8>>);
 
