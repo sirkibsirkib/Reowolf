@@ -113,16 +113,16 @@ impl Connector {
             Connector::Connected(connected) => connected,
             _ => return Err(NotConnected),
         };
-        let (ekey, native_polarity) =
+        let (port, native_polarity) =
             *connected.native_interface.get(native_port_index).ok_or(IndexOutOfBounds)?;
         if native_polarity != Putter {
             return Err(WrongPolarity);
         }
         let sync_batch = connected.sync_batches.iter_mut().last().expect("no sync batch!");
-        if sync_batch.puts.contains_key(&ekey) {
+        if sync_batch.puts.contains_key(&port) {
             return Err(DuplicateOperation);
         }
-        sync_batch.puts.insert(ekey, payload);
+        sync_batch.puts.insert(port, payload);
         Ok(())
     }
 
@@ -132,16 +132,16 @@ impl Connector {
             Connector::Connected(connected) => connected,
             _ => return Err(NotConnected),
         };
-        let (ekey, native_polarity) =
+        let (port, native_polarity) =
             *connected.native_interface.get(native_port_index).ok_or(IndexOutOfBounds)?;
         if native_polarity != Getter {
             return Err(WrongPolarity);
         }
         let sync_batch = connected.sync_batches.iter_mut().last().expect("no sync batch!");
-        if sync_batch.gets.contains(&ekey) {
+        if sync_batch.gets.contains(&port) {
             return Err(DuplicateOperation);
         }
-        sync_batch.gets.insert(ekey);
+        sync_batch.gets.insert(port);
         Ok(())
     }
     pub fn next_batch(&mut self) -> Result<usize, ()> {

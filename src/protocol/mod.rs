@@ -80,7 +80,7 @@ impl ProtocolDescription for ProtocolDescriptionImpl {
         }
         Ok(result)
     }
-    fn new_main_component(&self, identifier: &[u8], ports: &[Key]) -> ComponentStateImpl {
+    fn new_main_component(&self, identifier: &[u8], ports: &[Port]) -> ComponentStateImpl {
         let mut args = Vec::new();
         for (&x, y) in ports.iter().zip(self.component_polarities(identifier).unwrap()) {
             match y {
@@ -160,31 +160,31 @@ impl ComponentState for ComponentStateImpl {
                     // Not possible to create component in sync block
                     EvalContinuation::NewComponent(_, _) => unreachable!(),
                     EvalContinuation::BlockFires(port) => match port {
-                        Value::Output(OutputValue(key)) => {
-                            return PolyBlocker::CouldntCheckFiring(key);
+                        Value::Output(OutputValue(port)) => {
+                            return PolyBlocker::CouldntCheckFiring(port);
                         }
-                        Value::Input(InputValue(key)) => {
-                            return PolyBlocker::CouldntCheckFiring(key);
+                        Value::Input(InputValue(port)) => {
+                            return PolyBlocker::CouldntCheckFiring(port);
                         }
                         _ => unreachable!(),
                     },
                     EvalContinuation::BlockGet(port) => match port {
-                        Value::Output(OutputValue(key)) => {
-                            return PolyBlocker::CouldntReadMsg(key);
+                        Value::Output(OutputValue(port)) => {
+                            return PolyBlocker::CouldntReadMsg(port);
                         }
-                        Value::Input(InputValue(key)) => {
-                            return PolyBlocker::CouldntReadMsg(key);
+                        Value::Input(InputValue(port)) => {
+                            return PolyBlocker::CouldntReadMsg(port);
                         }
                         _ => unreachable!(),
                     },
                     EvalContinuation::Put(port, message) => {
-                        let key;
+                        let value;
                         match port {
-                            Value::Output(OutputValue(the_key)) => {
-                                key = the_key;
+                            Value::Output(OutputValue(port_value)) => {
+                                value = port_value;
                             }
-                            Value::Input(InputValue(the_key)) => {
-                                key = the_key;
+                            Value::Input(InputValue(port_value)) => {
+                                value = port_value;
                             }
                             _ => unreachable!(),
                         }
@@ -200,7 +200,7 @@ impl ComponentState for ComponentStateImpl {
                             }
                             _ => unreachable!(),
                         }
-                        return PolyBlocker::PutMsg(key, payload);
+                        return PolyBlocker::PutMsg(value, payload);
                     }
                 },
             }
@@ -214,30 +214,30 @@ pub enum EvalContext<'a> {
     None,
 }
 impl EvalContext<'_> {
-    fn random(&mut self) -> LongValue {
-        match self {
-            EvalContext::None => unreachable!(),
-            EvalContext::Mono(context) => todo!(),
-            EvalContext::Poly(_) => unreachable!(),
-        }
-    }
+    // fn random(&mut self) -> LongValue {
+    //     match self {
+    //         EvalContext::None => unreachable!(),
+    //         EvalContext::Mono(_context) => todo!(),
+    //         EvalContext::Poly(_) => unreachable!(),
+    //     }
+    // }
     fn new_component(&mut self, args: &[Value], init_state: ComponentStateImpl) -> () {
         match self {
             EvalContext::None => unreachable!(),
             EvalContext::Mono(context) => {
-                let mut moved_keys = HashSet::new();
+                let mut moved_ports = HashSet::new();
                 for arg in args.iter() {
                     match arg {
-                        Value::Output(OutputValue(key)) => {
-                            moved_keys.insert(*key);
+                        Value::Output(OutputValue(port)) => {
+                            moved_ports.insert(*port);
                         }
-                        Value::Input(InputValue(key)) => {
-                            moved_keys.insert(*key);
+                        Value::Input(InputValue(port)) => {
+                            moved_ports.insert(*port);
                         }
                         _ => {}
                     }
                 }
-                context.new_component(moved_keys, init_state)
+                context.new_component(moved_ports, init_state)
             }
             EvalContext::Poly(_) => unreachable!(),
         }
@@ -259,8 +259,8 @@ impl EvalContext<'_> {
             EvalContext::None => unreachable!(),
             EvalContext::Mono(_) => unreachable!(),
             EvalContext::Poly(context) => match port {
-                Value::Output(OutputValue(key)) => context.is_firing(key).map(Value::from),
-                Value::Input(InputValue(key)) => context.is_firing(key).map(Value::from),
+                Value::Output(OutputValue(port)) => context.is_firing(port).map(Value::from),
+                Value::Input(InputValue(port)) => context.is_firing(port).map(Value::from),
                 _ => unreachable!(),
             },
         }
@@ -270,10 +270,12 @@ impl EvalContext<'_> {
             EvalContext::None => unreachable!(),
             EvalContext::Mono(_) => unreachable!(),
             EvalContext::Poly(context) => match port {
-                Value::Output(OutputValue(key)) => {
-                    context.read_msg(key).map(Value::receive_message)
+                Value::Output(OutputValue(port)) => {
+                    context.read_msg(port).map(Value::receive_message)
                 }
-                Value::Input(InputValue(key)) => context.read_msg(key).map(Value::receive_message),
+                Value::Input(InputValue(port)) => {
+                    context.read_msg(port).map(Value::receive_message)
+                }
                 _ => unreachable!(),
             },
         }

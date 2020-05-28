@@ -34,8 +34,8 @@ pub(crate) struct Predicate {
 
 #[derive(Debug, Default)]
 struct SyncBatch {
-    puts: HashMap<Key, Payload>,
-    gets: HashSet<Key>,
+    puts: HashMap<Port, Payload>,
+    gets: HashSet<Port>,
 }
 
 #[derive(Debug)]
@@ -59,7 +59,7 @@ pub struct Configured {
 }
 #[derive(Debug)]
 pub struct Connected {
-    native_interface: Vec<(Key, Polarity)>,
+    native_interface: Vec<(Port, Polarity)>,
     sync_batches: Vec<SyncBatch>,
     controller: Controller,
 }
@@ -78,7 +78,7 @@ struct Arena<T> {
 
 #[derive(Debug)]
 struct ReceivedMsg {
-    recipient: Key,
+    recipient: Port,
     msg: Msg,
 }
 
@@ -88,7 +88,7 @@ struct MessengerState {
     events: Events,
     delayed: Vec<ReceivedMsg>,
     undelayed: Vec<ReceivedMsg>,
-    polled_undrained: IndexSet<Key>,
+    polled_undrained: IndexSet<Port>,
 }
 #[derive(Debug)]
 struct ChannelIdStream {
@@ -122,13 +122,13 @@ struct ControllerEphemeral {
     poly_n: Option<PolyN>,
     poly_ps: Vec<PolyP>,
     mono_ps: Vec<MonoP>,
-    ekey_to_holder: HashMap<Key, PolyId>,
+    port_to_holder: HashMap<Port, PolyId>,
 }
 
 #[derive(Debug)]
 struct ControllerFamily {
-    parent_ekey: Option<Key>,
-    children_ekeys: Vec<Key>,
+    parent_port: Option<Port>,
+    children_ports: Vec<Port>,
 }
 
 #[derive(Debug)]
@@ -149,12 +149,12 @@ enum PolyId {
 pub(crate) enum SubtreeId {
     PolyN,
     PolyP { index: usize },
-    ChildController { ekey: Key },
+    ChildController { port: Port },
 }
 
 pub(crate) struct MonoPContext<'a> {
     inner: &'a mut ControllerInner,
-    ekeys: &'a mut HashSet<Key>,
+    ports: &'a mut HashSet<Port>,
     mono_ps: &'a mut Vec<MonoP>,
 }
 pub(crate) struct PolyPContext<'a> {
@@ -171,9 +171,9 @@ impl PolyPContext<'_> {
 }
 struct BranchPContext<'m, 'r> {
     m_ctx: PolyPContext<'m>,
-    ekeys: &'r HashSet<Key>,
+    ports: &'r HashSet<Port>,
     predicate: &'r Predicate,
-    inbox: &'r HashMap<Key, Payload>,
+    inbox: &'r HashMap<Port, Payload>,
 }
 
 #[derive(Default)]
@@ -187,7 +187,7 @@ pub(crate) struct SolutionStorage {
 
 trait Messengerlike {
     fn get_state_mut(&mut self) -> &mut MessengerState;
-    fn get_endpoint_mut(&mut self, eekey: Key) -> &mut Endpoint;
+    fn get_endpoint_mut(&mut self, eport: Port) -> &mut Endpoint;
 
     fn delay(&mut self, received: ReceivedMsg) {
         self.get_state_mut().delayed.push(received);
@@ -197,7 +197,7 @@ trait Messengerlike {
         undelayed.extend(delayed.drain(..))
     }
 
-    fn send(&mut self, to: Key, msg: Msg) -> Result<(), EndpointErr> {
+    fn send(&mut self, to: Port, msg: Msg) -> Result<(), EndpointErr> {
         self.get_endpoint_mut(to).send(msg)
     }
 
@@ -210,15 +210,15 @@ trait Messengerlike {
 
         loop {
             // polled_undrained may not be empty
-            while let Some(eekey) = self.get_state_mut().polled_undrained.pop() {
+            while let Some(eport) = self.get_state_mut().polled_undrained.pop() {
                 if let Some(msg) = self
-                    .get_endpoint_mut(eekey)
+                    .get_endpoint_mut(eport)
                     .recv()
-                    .map_err(|e| MessengerRecvErr::EndpointErr(eekey, e))?
+                    .map_err(|e| MessengerRecvErr::EndpointErr(eport, e))?
                 {
                     // this endpoint MAY still have messages! check again in future
-                    self.get_state_mut().polled_undrained.insert(eekey);
-                    return Ok(Some(ReceivedMsg { recipient: eekey, msg }));
+                    self.get_state_mut().polled_undrained.insert(eport);
+                    return Ok(Some(ReceivedMsg { recipient: eport, msg }));
                 }
             }
 
@@ -226,7 +226,7 @@ trait Messengerlike {
             match state.poll_events(deadline) {
                 Ok(()) => {
                     for e in state.events.iter() {
-                        state.polled_undrained.insert(Key::from_token(e.token()));
+                        state.polled_undrained.insert(Port::from_token(e.token()));
                     }
                 }
                 Err(PollDeadlineErr::PollingFailed) => return Err(MessengerRecvErr::PollingFailed),
@@ -242,15 +242,15 @@ trait Messengerlike {
 
         loop {
             // polled_undrained may not be empty
-            while let Some(eekey) = self.get_state_mut().polled_undrained.pop() {
+            while let Some(eport) = self.get_state_mut().polled_undrained.pop() {
                 if let Some(msg) = self
-                    .get_endpoint_mut(eekey)
+                    .get_endpoint_mut(eport)
                     .recv()
-                    .map_err(|e| MessengerRecvErr::EndpointErr(eekey, e))?
+                    .map_err(|e| MessengerRecvErr::EndpointErr(eport, e))?
                 {
                     // this endpoint MAY still have messages! check again in future
-                    self.get_state_mut().polled_undrained.insert(eekey);
-                    return Ok(ReceivedMsg { recipient: eekey, msg });
+                    self.get_state_mut().polled_undrained.insert(eport);
+                    return Ok(ReceivedMsg { recipient: eport, msg });
                 }
             }
 
@@ -261,7 +261,7 @@ trait Messengerlike {
                 .poll(&mut state.events, None)
                 .map_err(|_| MessengerRecvErr::PollingFailed)?;
             for e in state.events.iter() {
-                state.polled_undrained.insert(Key::from_token(e.token()));
+                state.polled_undrained.insert(Port::from_token(e.token()));
             }
         }
     }
@@ -293,38 +293,33 @@ impl From<MessengerRecvErr> for ConnectErr {
         ConnectErr::MessengerRecvErr(e)
     }
 }
-// impl From<EndpointErr> for MessengerRecvErr {
-//     fn from(e: EndpointErr) -> MessengerRecvErr {
-//         MessengerRecvErr::EndpointErr(e)
-//     }
-// }
 impl<T> Default for Arena<T> {
     fn default() -> Self {
         Self { storage: vec![] }
     }
 }
 impl<T> Arena<T> {
-    pub fn alloc(&mut self, t: T) -> Key {
+    pub fn alloc(&mut self, t: T) -> Port {
         self.storage.push(t);
-        Key::from_raw(self.storage.len() - 1)
+        Port::from_raw(self.storage.len() - 1)
     }
-    pub fn get(&self, key: Key) -> Option<&T> {
+    pub fn get(&self, key: Port) -> Option<&T> {
         self.storage.get(key.to_raw() as usize)
     }
-    pub fn get_mut(&mut self, key: Key) -> Option<&mut T> {
+    pub fn get_mut(&mut self, key: Port) -> Option<&mut T> {
         self.storage.get_mut(key.to_raw() as usize)
     }
-    pub fn type_convert<X>(self, f: impl FnMut((Key, T)) -> X) -> Arena<X> {
+    pub fn type_convert<X>(self, f: impl FnMut((Port, T)) -> X) -> Arena<X> {
         Arena { storage: self.keyspace().zip(self.storage.into_iter()).map(f).collect() }
     }
-    pub fn iter(&self) -> impl Iterator<Item = (Key, &T)> {
+    pub fn iter(&self) -> impl Iterator<Item = (Port, &T)> {
         self.keyspace().zip(self.storage.iter())
     }
     pub fn len(&self) -> usize {
         self.storage.len()
     }
-    pub fn keyspace(&self) -> impl Iterator<Item = Key> {
-        (0..self.storage.len()).map(Key::from_raw)
+    pub fn keyspace(&self) -> impl Iterator<Item = Port> {
+        (0..self.storage.len()).map(Port::from_raw)
     }
 }
 

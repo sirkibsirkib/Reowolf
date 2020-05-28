@@ -886,7 +886,7 @@ impl Display for Value {
 }
 
 #[derive(Debug, Clone)]
-pub struct InputValue(pub Key);
+pub struct InputValue(pub Port);
 
 impl Display for InputValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -911,7 +911,7 @@ impl ValueImpl for InputValue {
 }
 
 #[derive(Debug, Clone)]
-pub struct OutputValue(pub Key);
+pub struct OutputValue(pub Port);
 
 impl Display for OutputValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

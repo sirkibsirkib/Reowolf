@@ -21,10 +21,10 @@ primitive forward(in i, out o) {
 primitive sync(in i, out o) {
     while(true) synchronous() if(fires(i)) put(o, get(i));
 }
-primitive alternator_2(in i, out a, out b) {
+primitive alternator_2(in i, out l, out r) {
     while(true) {
-        synchronous() put(a, get(i));
-        synchronous() put(b, get(i));
+        synchronous() put(l, get(i));
+        synchronous() put(r, get(i));
     }
 }
 primitive replicator_2(in i, out l, out r) {
@@ -43,7 +43,7 @@ primitive merger_2(in l, in r, out o) {
 
 impl InputSource {
     // Constructors
-    pub fn new<A: io::Read, S: ToString>(filename: S, reader: &mut A) -> io::Result<InputSource> {
+    pub fn new<R: io::Read, S: ToString>(filename: S, reader: &mut R) -> io::Result<InputSource> {
         let mut vec = STD_LIB_PDL.to_vec();
         reader.read_to_end(&mut vec)?;
         Ok(InputSource {

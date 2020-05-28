@@ -24,7 +24,6 @@ pub use Polarity::*;
 
 ///////////////////// DEFS /////////////////////
 
-// pub type Payload = Vec<u8>;
 pub type ControllerId = u32;
 pub type ChannelIndex = u32;
 
@@ -47,7 +46,6 @@ pub enum Polarity {
 #[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Copy, Clone)]
 #[repr(C)]
 pub struct Port(pub usize); // ports are COPY
-pub type Key = Port;
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum MainComponentErr {
@@ -64,7 +62,7 @@ pub trait ProtocolDescription: Sized {
 
     fn parse(pdl: &[u8]) -> Result<Self, String>;
     fn component_polarities(&self, identifier: &[u8]) -> Result<Vec<Polarity>, MainComponentErr>;
-    fn new_main_component(&self, identifier: &[u8], ports: &[Key]) -> Self::S;
+    fn new_main_component(&self, identifier: &[u8], ports: &[Port]) -> Self::S;
 }
 
 pub trait ComponentState: Sized + Clone {
@@ -93,24 +91,24 @@ pub enum MonoBlocker {
 pub enum PolyBlocker {
     Inconsistent,
     SyncBlockEnd,
-    CouldntReadMsg(Key),
-    CouldntCheckFiring(Key),
-    PutMsg(Key, Payload),
+    CouldntReadMsg(Port),
+    CouldntCheckFiring(Port),
+    PutMsg(Port, Payload),
 }
 
 pub trait MonoContext {
     type D: ProtocolDescription;
     type S: ComponentState<D = Self::D>;
 
-    fn new_component(&mut self, moved_keys: HashSet<Key>, init_state: Self::S);
-    fn new_channel(&mut self) -> [Key; 2];
+    fn new_component(&mut self, moved_ports: HashSet<Port>, init_state: Self::S);
+    fn new_channel(&mut self) -> [Port; 2];
     fn new_random(&mut self) -> u64;
 }
 pub trait PolyContext {
     type D: ProtocolDescription;
 
-    fn is_firing(&mut self, ekey: Key) -> Option<bool>;
-    fn read_msg(&mut self, ekey: Key) -> Option<&Payload>;
+    fn is_firing(&mut self, port: Port) -> Option<bool>;
+    fn read_msg(&mut self, port: Port) -> Option<&Payload>;
 }
 
 ///////////////////// IMPL /////////////////////
@@ -152,7 +150,7 @@ impl Debug for Port {
         write!(f, "Port({})", self.0)
     }
 }
-impl Key {
+impl Port {
     pub fn from_raw(raw: usize) -> Self {
         Self(raw)
     }
