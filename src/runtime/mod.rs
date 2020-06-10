@@ -39,92 +39,172 @@ struct SyncBatch {
 }
 
 /////////////////////
-pub(crate) struct ProtoComponentTodo {
-    name: Vec<u8>,
-    ports: Vec<PortId>,
-}
-pub(crate) struct EndpointId(usize);
-pub(crate) enum EndpointPolarity {
-    Accept,
-    Connect,
-}
-pub(crate) enum RecvRoute {
-    ThroughEndpoint { endpoint_id: EndpointId },
-    NativeComponent,
-    ProtocolComponent { component_idx: usize },
-}
-pub(crate) struct PortLogical {
-    peer: PortId,
-    polarity: Polarity,
-}
-pub(crate) struct Configured2 {
-    controller_id: ControllerId,
-    next_port_index: u32,
-    protocol_description: Arc<ProtocolD>,
-    net_ports_todo: HashMap<PortId, TodoEndpoint>,
-    port_logical: HashMap<PortId, PortLogical>,
-    port_recv_route: HashMap<PortId, RecvRoute>,
-    proto_component_todos: Vec<ProtoComponentTodo>,
-}
-pub(crate) struct TodoEndpoint {
-    port_polarity: Polarity,
-    endpoint_polarity: EndpointPolarity,
-    addr: SocketAddr,
-}
-impl Configured2 {
-    fn generate_port(&mut self) -> PortId {
-        PortId {
-            controller_id: self.controller_id,
-            port_index: {
-                // ensure we don't overflow
-                assert_ne!(self.next_port_index, std::u32::MAX);
-                self.next_port_index += 1;
-                self.next_port_index - 1
-            },
-        }
-    }
-    fn add_net_port(&mut self, todo_endpoint: TodoEndpoint) -> PortId {
-        let port = self.generate_port();
-        self.net_ports_todo.insert(port, todo_endpoint); // Peer unknown!
-        self.port_recv_route.insert(port, RecvRoute::NativeComponent);
-        port
-    }
-    fn add_port_pair(&mut self) -> [PortId; 2] {
-        let [a, b] = [self.generate_port(), self.generate_port()];
-        self.port_logical.insert(a, PortLogical { peer: b, polarity: Polarity::Putter });
-        self.port_logical.insert(b, PortLogical { peer: a, polarity: Polarity::Putter });
-        self.port_recv_route.insert(a, RecvRoute::NativeComponent);
-        self.port_recv_route.insert(b, RecvRoute::NativeComponent);
-        [a, b]
-    }
-    fn add_component(&mut self, name: Vec<u8>, ports: &[PortId]) -> Result<(), PortId> {
-        // 1. check that they all route to the native
-        for port in ports {
-            match self.port_recv_route.get(port) {
-                Some(RecvRoute::NativeComponent) => { /* do nothing */ }
-                _ => return Err(*port),
-            }
-        }
-        // 2. create a new component todo
-        self.proto_component_todos.push(ProtoComponentTodo { name, ports: ports.to_vec() });
-        let component_idx = self.proto_component_todos.len();
-        // 3. overwrite route mappings, route to this component
-        for &port in ports {
-            self.port_recv_route.insert(port, RecvRoute::ProtocolComponent { component_idx });
-        }
-        Ok(())
-    }
-    fn connect(&mut self) -> Result<(), ConnectErr2> {
-        // 1. bind all acceptors
-        // 2. connect all acceptors and connectors and send my (PortId, Polarity).
-        // 3. finish populating port_logical mappings
-        // 4. echo alg. with extinction to build neighborhood
-        Ok(())
-    }
-}
-enum ConnectErr2 {
-    AcceptBindErr(PortId),
-}
+// pub(crate) struct ProtoComponentTodo {
+//     name: Vec<u8>,
+//     ports: Vec<PortId>,
+// }
+// pub(crate) struct EndpointId(usize);
+// pub(crate) struct ComponentId(usize);
+// pub(crate) enum EndpointPolarity {
+//     Accept,
+//     Connect,
+// }
+// pub(crate) enum RecvRoute {
+//     ThroughEndpoint { endpoint_id: EndpointId },
+//     NativeComponent,
+//     ProtocolComponent { component_idx: usize },
+// }
+// pub(crate) struct PortLogical {
+//     peer: PortId,
+//     polarity: Polarity,
+// }
+
+// // this structure communicates the initial topology of the system
+// pub(crate) struct IntegerAllocator {
+//     free_suffix_start: usize,
+//     free_holes_in_prefix: Vec<usize>, // invariant: sorted, and all elements smaller than `free_suffix_start`
+// }
+// impl IntegerAllocator {
+//     const MAX: usize = std::usize::MAX;
+//     fn alloc(&mut self) -> Option<usize> {
+//         if let Some(int) = self.free_holes_in_prefix.pop() {
+//             // case (a) remove a hole from allocated prefix
+//             return Some(int);
+//         }
+//         if self.free_suffix_start == Self::MAX {
+//             // case (b) all elements allocated!
+//             return None;
+//         }
+//         // case (c) grow allocated prefix
+//         self.free_suffix_start += 1;
+//         let int = self.free_suffix_start - 1;
+//         Some(int)
+//     }
+//     fn free(&mut self, int: usize) -> Result<(), ()> {
+//         if int < Self::MAX && int + 1 == self.free_suffix_start {
+//             // case (a) shrink the allocated prefix
+//             self.free_suffix_start -= 1;
+//             return Ok(());
+//         }
+//         if let Err(idx) = self.free_holes_in_prefix.binary_search(&int) {
+//             // case (b) create a hole in allocated prefix
+//             self.free_holes_in_prefix.insert(idx, int);
+//             return Ok(());
+//         }
+//         // case (c) this element isn't allocated!
+//         Err(())
+//     }
+// }
+
+// pub(crate) struct TodoEndpoint {
+//     port_polarity: Polarity,
+//     endpoint_polarity: EndpointPolarity,
+//     addr: SocketAddr,
+// }
+
+// // variant of connector. user is adding ports and components
+// pub(crate) struct Configured2 {
+//     id_manager: IdManager,
+//     port_peers: HashMap<PortId, PortId>,
+//     todo_endpoints: Vec<(PortId, TodoEndpoint)>,
+// }
+// impl Configured2 {
+//     fn connect(&mut self) -> Result<(), ()> {
+//         // 1. build Planned structure
+//         // 2.
+//         todo!()
+//     }
+// }
+
+// pub(crate) struct Plan {}
+
+// pub(crate) struct Connected2 {}
+
+// pub(crate) struct IdManager {
+//     controller_id: ControllerId,
+//     suffix_allocator_port: IntegerAllocator,
+//     suffix_allocator_endpoint: IntegerAllocator,
+// }
+
+// pub(crate) struct Planning {
+//     native_ports: HashSet<PortId>,
+//     port_peers: HashMap<PortId, PortId>,
+//     endpoint_peers: HashMap<PortId, PortId>,
+//     proto_component_todos: Vec<ProtoComponentTodo>, // components are INDEXED
+// }
+// //
+// pub(crate) struct Planned {
+//     id_manager: IdManager,
+//     s_to_r: HashMap<PortId, PortId>,
+//     r_to_controller: HashMap<PortId, ControllerId>,
+//     controller_to_endpoint: HashMap<ControllerId, EndpointId>,
+//     r_to_local_component: HashMap<PortId, ComponentId>,
+//     proto_component_todos: HashMap<ComponentId, ProtoComponentTodo>,
+// }
+
+// pub(crate) struct Configured2 {
+//     controller_id: ControllerId,
+//     protocol_description: Arc<ProtocolD>,
+//     next_port_index: u32,
+//     net_ports_todo: HashMap<PortId, TodoEndpoint>,
+//     port_logical: HashMap<PortId, PortLogical>,
+//     port_recv_route: HashMap<PortId, RecvRoute>,
+//     proto_component_todos: Vec<ProtoComponentTodo>,
+// }
+// impl Configured2 {
+//     fn generate_port(&mut self) -> PortId {
+//         PortId {
+//             controller_id: self.controller_id,
+//             port_index: {
+//                 // ensure we don't overflow
+//                 assert_ne!(self.next_port_index, std::u32::MAX);
+//                 self.next_port_index += 1;
+//                 self.next_port_index - 1
+//             },
+//         }
+//     }
+//     fn add_net_port(&mut self, todo_endpoint: TodoEndpoint) -> PortId {
+//         let port = self.generate_port();
+//         self.net_ports_todo.insert(port, todo_endpoint); // Peer unknown!
+//         self.port_recv_route.insert(port, RecvRoute::NativeComponent);
+//         port
+//     }
+//     fn add_port_pair(&mut self) -> [PortId; 2] {
+//         let [a, b] = [self.generate_port(), self.generate_port()];
+//         self.port_logical.insert(a, PortLogical { peer: b, polarity: Polarity::Putter });
+//         self.port_logical.insert(b, PortLogical { peer: a, polarity: Polarity::Putter });
+//         self.port_recv_route.insert(a, RecvRoute::NativeComponent);
+//         self.port_recv_route.insert(b, RecvRoute::NativeComponent);
+//         [a, b]
+//     }
+//     fn add_component(&mut self, name: Vec<u8>, ports: &[PortId]) -> Result<(), PortId> {
+//         // 1. check that they all route to the native
+//         for port in ports {
+//             match self.port_recv_route.get(port) {
+//                 Some(RecvRoute::NativeComponent) => { /* do nothing */ }
+//                 _ => return Err(*port),
+//             }
+//         }
+//         // 2. create a new component todo
+//         self.proto_component_todos.push(ProtoComponentTodo { name, ports: ports.to_vec() });
+//         let component_idx = self.proto_component_todos.len();
+//         // 3. overwrite route mappings, route to this component
+//         for &port in ports {
+//             self.port_recv_route.insert(port, RecvRoute::ProtocolComponent { component_idx });
+//         }
+//         Ok(())
+//     }
+//     fn connect(&mut self) -> Result<(), ConnectErr2> {
+//         // 1. bind all acceptors
+//         // 2. connect all acceptors and connectors and send my (PortId, Polarity).
+//         // 3. finish populating port_logical mappings
+//         // 4. echo alg. with extinction to build neighborhood
+//         Ok(())
+//     }
+// }
+// enum ConnectErr2 {
+//     AcceptBindErr(PortId),
+// }
 /////////////////////////////////
 
 #[derive(Debug)]
